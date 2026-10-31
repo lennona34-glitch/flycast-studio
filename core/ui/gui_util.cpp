@@ -59,7 +59,7 @@ void select_file_popup(const char *prompt, StringCallback callback,
 {
 	fullScreenWindow(true);
 	ImguiStyleVar _(ImGuiStyleVar_WindowRounding, 0);
-	ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ImVec2(4, 3)); // default
+	ImguiStyleVar _1(ImGuiStyleVar_FramePadding, ScaledVec2(14, 8));
 
 	if (ImGui::BeginPopup(prompt, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize ))
 	{
@@ -167,7 +167,7 @@ void select_file_popup(const char *prompt, StringCallback callback,
 		ImGui::EndChild();
 		if (!selectFile)
 		{
-			if (ImGui::Button(T("Select Current Folder"), ScaledVec2(0, 30)))
+			if (ImGui::Button(T("Select Current Folder"), ScaledVec2(0, 38)))
 			{
 				if (callback(false, select_current_directory))
 				{
@@ -177,7 +177,7 @@ void select_file_popup(const char *prompt, StringCallback callback,
 			}
 			ImGui::SameLine();
 		}
-		if (ImGui::Button(T("Cancel"), ScaledVec2(0, 30)))
+		if (ImGui::Button(T("Cancel"), ScaledVec2(120, 38)))
 		{
 			subfolders_read = false;
 			callback(true, "");
@@ -787,6 +787,8 @@ bool beginFrame(const char *label, const ImVec2& size_arg, ImVec2 *out_size)
 
     const ImU32 bg_col = GetColorU32(ImGuiCol_FrameBg);
     window->DrawList->AddRectFilled(frame_bb.Min, frame_bb.Max, bg_col, g.Style.FrameRounding, 0);
+    if (g.Style.FrameBorderSize > 0.0f)
+        window->DrawList->AddRect(frame_bb.Min, frame_bb.Max, GetColorU32(ImGuiCol_Border), g.Style.FrameRounding, 0, g.Style.FrameBorderSize);
     window->DC.CursorPos += style.FramePadding;
     PushClipRect(frame_bb.Min + style.FramePadding, frame_bb.Max - style.FramePadding, false);
     if (out_size != nullptr)

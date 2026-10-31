@@ -42,8 +42,8 @@
 static SDL_Window* window = NULL;
 static u32 windowFlags;
 
-#define WINDOW_WIDTH  640
-#define WINDOW_HEIGHT  480
+#define WINDOW_WIDTH  1360
+#define WINDOW_HEIGHT  840
 
 static std::unordered_map<u32, std::shared_ptr<SDLMouse>> sdl_mice;
 static std::shared_ptr<SDLKeyboardDevice> sdl_keyboard;
@@ -119,7 +119,7 @@ static void setWindowTitleGame()
 		else
 			title = settings.content.title;
 	}
-	SDL_SetWindowTitle(window, ("Flycast - " + title).c_str());
+	SDL_SetWindowTitle(window, ("Flycast-XR - " + title).c_str());
 }
 
 static void captureMouse(bool capture)
@@ -142,7 +142,7 @@ static void captureMouse(bool capture)
 		{
 			if (config::UseRawInput)
 				SDL_ShowCursor(SDL_DISABLE);
-			SDL_SetWindowTitle(window, "Flycast - mouse capture");
+			SDL_SetWindowTitle(window, "Flycast-XR - mouse capture");
 			mouseCaptured = true;
 		}
 	}
@@ -153,7 +153,7 @@ static void emuEventCallback(Event event, void *)
 	switch (event)
 	{
 	case Event::Terminate:
-		SDL_SetWindowTitle(window, "Flycast");
+		SDL_SetWindowTitle(window, "Flycast-XR");
 		sdl_stopHaptic(0);
 		break;
 	case Event::Pause:
@@ -166,9 +166,13 @@ static void emuEventCallback(Event event, void *)
 		break;
 	case Event::Resume:
 		gameRunning = true;
+		if (window != nullptr && window_fullscreen)
+		{
+			SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+			if (!mouseCaptured)
+				SDL_ShowCursor(SDL_DISABLE);
+		}
 		captureMouse(mouseCaptured);
-		if (window_fullscreen && !mouseCaptured)
-			SDL_ShowCursor(SDL_DISABLE);
 		resumeHaptic();
 		break;
 	default:
@@ -369,23 +373,20 @@ void input_sdl_handle()
 					};
 					if (event.type == SDL_KEYDOWN)
 					{
+						// Escape exits full screen
+						if (event.key.keysym.sym == SDLK_ESCAPE && window_fullscreen)
+						{
+							if (ImGui::GetCurrentContext() == nullptr || !ImGui::GetIO().WantTextInput)
+							{
+								sdl_set_fullscreen(false);
+								break;
+							}
+						}
 						// Alt-Return and F11 toggle full screen
 						if ((event.key.keysym.sym == SDLK_RETURN && (event.key.keysym.mod & KMOD_ALT))
 								|| (event.key.keysym.sym == SDLK_F11 && (event.key.keysym.mod & (KMOD_ALT | KMOD_CTRL | KMOD_SHIFT | KMOD_GUI)) == 0))
 						{
-							if (window_fullscreen)
-							{
-								SDL_SetWindowFullscreen(window, 0);
-								if (!gameRunning || !mouseCaptured)
-									SDL_ShowCursor(SDL_ENABLE);
-							}
-							else
-							{
-								SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
-								if (gameRunning)
-									SDL_ShowCursor(SDL_DISABLE);
-							}
-							window_fullscreen = !window_fullscreen;
+							sdl_set_fullscreen(!window_fullscreen);
 							break;
 						}
 						// Left-Alt + Left-CTRL toggles mouse capture
@@ -630,6 +631,8 @@ bool sdl_update_display_metrics(SDL_Window *window, u32 windowFlags)
 {
 	float oldPointScale = settings.display.pointScale;
 	float oldDpi = settings.display.dpi;
+	int oldWidth = settings.display.width;
+	int oldHeight = settings.display.height;
 
 	int windowWidth = 0;
 	int windowHeight = 0;
@@ -666,7 +669,8 @@ bool sdl_update_display_metrics(SDL_Window *window, u32 windowFlags)
 
 	sdl_fix_steamdeck_dpi(window);
 
-	return settings.display.pointScale != oldPointScale || settings.display.dpi != oldDpi;
+	bool crossedLowRes = (oldWidth <= 640 || oldHeight <= 480) != (settings.display.width <= 640 || settings.display.height <= 480);
+	return settings.display.pointScale != oldPointScale || settings.display.dpi != oldDpi || crossedLowRes;
 }
 
 static inline void get_window_state()
@@ -790,7 +794,12 @@ bool sdl_recreate_window(u32 flags)
 	windowPos.y = config::loadInt("window", "top", windowPos.y);
 	windowPos.w = config::loadInt("window", "width", windowPos.w);
 	windowPos.h = config::loadInt("window", "height", windowPos.h);
-	window_fullscreen = config::loadBool("window", "fullscreen", window_fullscreen);
+	if (windowPos.w <= 640 || windowPos.h <= 480)
+	{
+		windowPos.w = WINDOW_WIDTH;
+		windowPos.h = WINDOW_HEIGHT;
+	}
+	window_fullscreen = config::loadBool("window", "fullscreen", true);
 	window_maximized = config::loadBool("window", "maximized", window_maximized);
 	if (window != nullptr)
 		get_window_state();
@@ -835,12 +844,16 @@ bool sdl_recreate_window(u32 flags)
 	flags |= SDL_WINDOW_FULLSCREEN;
 #endif
 
-	window = SDL_CreateWindow("Flycast", windowPos.x, windowPos.y,
+	window = SDL_CreateWindow("Flycast-XR", windowPos.x, windowPos.y,
 			windowPos.w * hdpiScaling, windowPos.h * hdpiScaling, flags);
 	if (window == nullptr)
 	{
 		ERROR_LOG(COMMON, "Window creation failed: %s", SDL_GetError());
 		return false;
+	}
+	if (window_fullscreen)
+	{
+		SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
 	}
 	settings.display.width = windowPos.w * hdpiScaling;
 	settings.display.height = windowPos.h * hdpiScaling;
@@ -997,6 +1010,34 @@ void sdl_window_destroy()
 	SDL_DestroyWindow(window);
 	window = nullptr;
 	SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+
+void sdl_set_fullscreen(bool fullscreen)
+{
+	if (window == nullptr)
+		return;
+	if (fullscreen != window_fullscreen)
+	{
+		if (fullscreen)
+		{
+			SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+			if (gameRunning)
+				SDL_ShowCursor(SDL_DISABLE);
+		}
+		else
+		{
+			SDL_SetWindowFullscreen(window, 0);
+			if (!gameRunning || !mouseCaptured)
+				SDL_ShowCursor(SDL_ENABLE);
+		}
+		window_fullscreen = fullscreen;
+		config::saveBool("window", "fullscreen", window_fullscreen);
+	}
+}
+
+bool sdl_is_fullscreen()
+{
+	return window_fullscreen;
 }
 
 void sdl_fix_steamdeck_dpi(SDL_Window *window)

@@ -202,10 +202,19 @@ static void loadFonts(const std::vector<FontEntry>& entries, const ImFontConfig&
 			ImFontConfig entryCfg = cfg;
 			entryCfg.FontNo = e.fontNo.value;
 			entryCfg.GlyphOffset.y = e.size * e.offsetY;
-			static ImWchar faRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+			static const ImWchar faRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+			static const ImWchar cjkOnlyRanges[] = {
+				0x3000, 0x30FF, // CJK Symbols, Punctuation, Hiragana, Katakana
+				0x31F0, 0x31FF, // Katakana Phonetic Extensions
+				0x4E00, 0x9FFF, // CJK Unified Ideographs
+				0xAC00, 0xD7AF, // Hangul Syllables
+				0xF900, 0xFAFF, // CJK Compatibility Ideographs
+				0xFF00, 0xFFEF, // Halfwidth and Fullwidth Forms
+				0
+			};
 			entryCfg.GlyphExcludeRanges = faRanges;
 			
-			ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(path.c_str(), e.size, &entryCfg, nullptr);
+			ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(path.c_str(), e.size, &entryCfg, cjkOnlyRanges);
 			if (font)
 			{
 				loaded = true;
@@ -253,35 +262,84 @@ void gui_loadFonts()
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->Clear();
 	io.Fonts->SetFontLoader(ImGuiFreeType::GetFontLoader());
+	io.Fonts->FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LightHinting;
 	
-	// Regular font
+	// Crisp, readable base font size for modern desktop & console displays
 	ImGuiStyle& style = ImGui::GetStyle();
-	const float fontSize = uiScaled(17.f);
+	const float fontSize = std::round(uiScaled(21.f));
 	
 	size_t dataSize;
-	std::unique_ptr<u8[]> data = resource::load("fonts/Roboto-Medium.ttf", dataSize);
-	verify(data != nullptr);
-	ImFont *regularFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, nullptr, nullptr);
+	std::unique_ptr<u8[]> data;
+	ImFont *regularFont = nullptr;
+	ImFontConfig baseFontCfg;
+	baseFontCfg.OversampleH = 2;
+	baseFontCfg.OversampleV = 2;
+	baseFontCfg.PixelSnapH = true;
+
+#ifdef _WIN32
+	std::string winFontDir = std::string(nowide::getenv("SYSTEMROOT") ? nowide::getenv("SYSTEMROOT") : "C:\\Windows") + "\\Fonts\\";
+	// Prefer native Windows Segoe UI Semibold / Regular for razor-sharp desktop typography
+	regularFont = io.Fonts->AddFontFromFileTTF((winFontDir + "seguisb.ttf").c_str(), fontSize, &baseFontCfg, nullptr);
+	if (!regularFont)
+		regularFont = io.Fonts->AddFontFromFileTTF((winFontDir + "segoeui.ttf").c_str(), fontSize, &baseFontCfg, nullptr);
+#endif
+	if (!regularFont)
+	{
+		data = resource::load("fonts/Roboto-Medium.ttf", dataSize);
+		verify(data != nullptr);
+		regularFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &baseFontCfg, nullptr);
+	}
 	ImFontConfig fontConfig;
 	fontConfig.MergeMode = true;
+	fontConfig.PixelSnapH = true;
 	fontConfig.DstFont = regularFont;
 	
 	// Bold font
-	data = resource::load("fonts/Roboto-Bold.ttf", dataSize);
-	verify(data != nullptr);
-	boldFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, nullptr, nullptr);
+	boldFont = nullptr;
+#ifdef _WIN32
+	boldFont = io.Fonts->AddFontFromFileTTF((winFontDir + "segoeuib.ttf").c_str(), fontSize, &baseFontCfg, nullptr);
+#endif
+	if (!boldFont)
+	{
+		data = resource::load("fonts/Roboto-Bold.ttf", dataSize);
+		verify(data != nullptr);
+		boldFont = io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &baseFontCfg, nullptr);
+	}
 	ImFontConfig boldFontConfig;
 	boldFontConfig.MergeMode = true;
+	boldFontConfig.PixelSnapH = true;
 	boldFontConfig.DstFont = boldFont;
+
+	// Merge Font Awesome symbols immediately after primary Latin font so icons are never hijacked
+	{
+		static const ImWchar faExplicitRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+		data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
+		verify(data != nullptr);
+		ImFontConfig faFontConfig = fontConfig;
+		faFontConfig.FontDataOwnedByAtlas = false;
+		faFontConfig.GlyphMinAdvanceX = fontSize * 0.85f;
+		io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize * 0.92f, &faFontConfig, faExplicitRanges);
+		ImFontConfig faBoldConfig = boldFontConfig;
+		faBoldConfig.FontDataOwnedByAtlas = true;
+		faBoldConfig.GlyphMinAdvanceX = fontSize * 0.85f;
+		io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize * 0.92f, &faBoldConfig, faExplicitRanges);
+	}
 	
 	std::vector<FontEntry> fonts;
 	std::vector<FontEntry> boldFonts;
 	fontConfig.Flags |= ImFontFlags_NoLoadError;
 	boldFontConfig.Flags |= ImFontFlags_NoLoadError;
 	
+	static const ImWchar emojiExcludeRanges[] = {
+		0x0001, 0x20FF,
+		ICON_MIN_FA, ICON_MAX_FA,
+		0
+	};
 	ImFontConfig emojiConfig = fontConfig;
+	emojiConfig.GlyphExcludeRanges = emojiExcludeRanges;
 	emojiConfig.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor | ImGuiFreeTypeBuilderFlags_Bitmap;
 	ImFontConfig emojiBoldConfig = boldFontConfig;
+	emojiBoldConfig.GlyphExcludeRanges = emojiExcludeRanges;
 	emojiBoldConfig.FontLoaderFlags |= ImGuiFreeTypeLoaderFlags_LoadColor | ImGuiFreeTypeBuilderFlags_Bitmap;
 	
 #ifdef _WIN32
@@ -467,16 +525,6 @@ void gui_loadFonts()
 	
 	loadFonts(fonts, fontConfig);
 	loadFonts(boldFonts, boldFontConfig);
-	
-	// Font Awesome symbols
-	data = resource::load("fonts/" FONT_ICON_FILE_NAME_FAS, dataSize);
-	verify(data != nullptr);
-	
-	ImFontConfig faFontConfig = fontConfig;
-	faFontConfig.FontDataOwnedByAtlas = false;
-	io.Fonts->AddFontFromMemoryTTF(data.get(), (int)dataSize, fontSize, &faFontConfig);
-	boldFontConfig.FontDataOwnedByAtlas = true;
-	io.Fonts->AddFontFromMemoryTTF(data.release(), (int)dataSize, fontSize, &boldFontConfig);
 
 	// AddFont() may sync the active ImGui font stack using the previous size.
 	// Re-apply the rebuilt atlas size after all fonts have been registered.

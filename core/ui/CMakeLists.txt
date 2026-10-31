@@ -12,6 +12,10 @@ if(NOT LIBRETRO)
             vgamepad.h
             gui_chat.h
             gui_cheats.cpp
+            gui_gamebanana.cpp
+            gui_gamebanana.h
+            gui_quest_vr.cpp
+            gui_quest_vr.h
             gui_util.cpp
             gui_util.h
             mainui.cpp

@@ -53,6 +53,8 @@
 #include "settings.h"
 #include "oslib/i18n.h"
 #include "gui_font.h"
+#include "gui_quest_vr.h"
+#include "gui_gamebanana.h"
 using namespace i18n;
 
 #ifdef _WIN32
@@ -204,7 +206,8 @@ void gui_updateStyle()
 	uiThreadRunner.init();
 
 #if !defined(TARGET_UWP) && !defined(__SWITCH__)
-	const float dpiScale = std::max(1.f, settings.display.dpi / 100.f * 0.75f);
+	const float effectiveDpi = settings.display.dpi > 0.f ? settings.display.dpi : 96.f;
+	const float dpiScale = std::max(1.12f, (effectiveDpi / 96.f) * 1.10f);
 #if defined(__APPLE__) && !defined(TARGET_IPHONE)
 	if (settings.display.pointScale > 1.f)
 		// Match macOS point scaling for HiDPI modes.
@@ -215,30 +218,52 @@ void gui_updateStyle()
 #else
 	settings.display.uiScale = dpiScale;
 #endif
-   	// Limit scaling on small low-res screens
-    if (settings.display.width <= 640 || settings.display.height <= 480)
-    	settings.display.uiScale = std::min(1.2f, settings.display.uiScale);
+#if defined(__ANDROID__) || defined(TARGET_IPHONE)
+	// Limit scaling only on tiny embedded mobile screens
+	if (settings.display.width <= 640 || settings.display.height <= 480)
+		settings.display.uiScale = std::min(1.2f, settings.display.uiScale);
+#endif
 #endif
     settings.display.uiScale *= config::UIScaling / 100.f;
 	if (settings.display.uiScale == uiScale && ImGui::GetIO().Fonts->IsBuilt())
 		return;
 	uiScale = settings.display.uiScale;
 
-    // Setup Dear ImGui style
-	ImGui::GetStyle() = ImGuiStyle{};
+    // Setup modern, spacious Dear ImGui studio geometry before scaling
+	ImGuiStyle& style = ImGui::GetStyle();
+	style = ImGuiStyle{};
 
-    // Apply the current theme
+	style.WindowPadding     = ImVec2(22.0f, 18.0f);
+	style.FramePadding      = ImVec2(14.0f, 8.0f);
+	style.CellPadding       = ImVec2(12.0f, 8.0f);
+	style.ItemSpacing       = ImVec2(14.0f, 11.0f);
+	style.ItemInnerSpacing  = ImVec2(10.0f, 8.0f);
+	style.IndentSpacing     = 24.0f;
+	style.ScrollbarSize     = 16.0f;
+	style.GrabMinSize       = 14.0f;
+
+	style.WindowBorderSize  = 1.0f;
+	style.ChildBorderSize   = 1.0f;
+	style.PopupBorderSize   = 1.0f;
+	style.FrameBorderSize   = 1.0f;
+	style.TabBorderSize     = 0.0f;
+
+	style.WindowRounding    = 10.0f;
+	style.ChildRounding     = 10.0f;
+	style.FrameRounding     = 7.0f;
+	style.PopupRounding     = 10.0f;
+	style.ScrollbarRounding = 8.0f;
+	style.GrabRounding      = 6.0f;
+	style.TabRounding       = 7.0f;
+
+    // Apply the current theme colors
     applyCurrentTheme();
 
-    ImGui::GetStyle().TabRounding = 5.0f;
-    ImGui::GetStyle().FrameRounding = 3.0f;
-    ImGui::GetStyle().ItemSpacing = ImVec2(8, 8);		// from 8,4
-    ImGui::GetStyle().ItemInnerSpacing = ImVec2(4, 6);	// from 4,4
 #if defined(__ANDROID__) || defined(TARGET_IPHONE) || defined(__SWITCH__)
-    ImGui::GetStyle().TouchExtraPadding = ImVec2(1, 1);	// from 0,0
+    style.TouchExtraPadding = ImVec2(2, 2);
 #endif
 	if (settings.display.uiScale != 1.f)
-		ImGui::GetStyle().ScaleAllSizes(settings.display.uiScale);
+		style.ScaleAllSizes(settings.display.uiScale);
 	
 	gui_loadFonts();
 	
@@ -531,14 +556,14 @@ static void gui_display_commands()
 	{
 		ImguiStyleVar _{ImGuiStyleVar_ButtonTextAlign, ImVec2(0.f, 0.5f)};	// left aligned
 
-		float columnWidth = std::min(200.f,
-				(ImGui::GetContentRegionAvail().x - uiScaled(100 + 150) - ImGui::GetStyle().FramePadding.x * 2)
+		float columnWidth = std::min(240.f,
+				(ImGui::GetContentRegionAvail().x - uiScaled(100 + 200) - ImGui::GetStyle().FramePadding.x * 2)
 				/ 2 / uiScaled(1));
-		float buttonWidth = 150.f;	// not scaled
+		float buttonWidth = 200.f;	// not scaled
 		bool lowWidth = ImGui::GetContentRegionAvail().x < uiScaled(100 + buttonWidth * 3)
 				+ ImGui::GetStyle().FramePadding.x * 2 + ImGui::GetStyle().ItemSpacing.x * 2;
 		if (lowWidth)
-			buttonWidth = std::min(150.f,
+			buttonWidth = std::min(200.f,
 					(ImGui::GetContentRegionAvail().x - ImGui::GetStyle().FramePadding.x * 2 - ImGui::GetStyle().ItemSpacing.x * 2)
 					/ 3 / uiScaled(1));
 		bool lowHeight = ImGui::GetContentRegionAvail().y < uiScaled(100 + 50 * 2 + buttonWidth * 3 / 4) + ImGui::GetTextLineHeightWithSpacing() * 2
@@ -556,7 +581,7 @@ static void gui_display_commands()
 		if (!lowHeight)
 		{
 			ImGui::BeginChild("game_info", ScaledVec2(0, 100.f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
-			ImGui::PushFont(nullptr, uiLargeFontSize());
+			ImGui::PushFont(boldFont, uiLargeFontSize());
 			ImGui::Text("%s", art.name.c_str());
 			ImGui::PopFont();
 			{
@@ -582,7 +607,7 @@ static void gui_display_commands()
 			ImguiVmuTexture::displayVmus(vmuPos);
 			ImGui::NextColumn();
 		}
-		ImguiStyleVar _1{ImGuiStyleVar_FramePadding, ScaledVec2(12.f, 3.f)};
+		ImguiStyleVar _1{ImGuiStyleVar_FramePadding, ScaledVec2(14.f, 8.f)};
 
 		// Resume
 		if (IconButton(ICON_FA_PLAY, T("Resume"), ScaledVec2(buttonWidth, 50)).realize())
@@ -604,6 +629,10 @@ static void gui_display_commands()
 			if (IconButton(ICON_FA_TROPHY, T("Achievements"), ScaledVec2(buttonWidth, 50)).realize() && achievements::isActive())
 				gui_setState(GuiState::Achievements);
 		}
+		// Quest VR Studio
+		if (IconButton(ICON_FA_VR_CARDBOARD, T("Quest VR"), ScaledVec2(buttonWidth, 50)).realize())
+			gui_setState(GuiState::QuestVR);
+
 		// Barcode
 		if (card_reader::barcodeAvailable())
 		{
@@ -632,6 +661,19 @@ static void gui_display_commands()
 		// Settings
 		if (IconButton(ICON_FA_GEAR, T("Settings"), ScaledVec2(buttonWidth, 50)).realize())
 			gui_setState(GuiState::Settings);
+
+		// GameBanana Mods & Cheats
+		if (IconButton(ICON_FA_PUZZLE_PIECE, T("GameBanana"), ScaledVec2(buttonWidth, 50)).realize())
+			gui_setState(GuiState::GameBanana);
+
+		// Full Screen Toggle
+		bool isFullscreen = sdl_is_fullscreen();
+		if (IconButton(isFullscreen ? ICON_FA_COMPRESS : ICON_FA_EXPAND,
+				isFullscreen ? T("Exit Full Screen") : T("Full Screen"),
+				ScaledVec2(buttonWidth, 50)).realize())
+		{
+			sdl_set_fullscreen(!isFullscreen);
+		}
 
 		// Exit
 		if (IconButton(ICON_FA_POWER_OFF, commandLineStart ?  T("Exit") : T("Close Game"), ScaledVec2(buttonWidth, 50)).realize())
@@ -881,37 +923,57 @@ static void gui_display_content()
 
     ImGui::Begin("##main", nullptr, ImGuiWindowFlags_NoDecoration);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(20, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(18, 9));
     ImGui::AlignTextToFramePadding();
     ImGui::Indent(uiScaled(10));
-    ImGui::Text("%s", T("GAMES"));
+    ImGui::PushFont(boldFont, uiLargeFontSize());
+    ImGui::TextColored(ImVec4(0.28f, 0.62f, 1.0f, 1.0f), ICON_FA_COMPACT_DISC);
+    ImGui::SameLine(0, uiScaled(10));
+    ImGui::Text("%s", T("FLYCAST-XR STUDIO"));
+    ImGui::PopFont();
     ImGui::Unindent(uiScaled(10));
 
     static ImGuiTextFilter filter;
+    IconButton questVrBtn(ICON_FA_VR_CARDBOARD, T("Quest VR"));
+    IconButton gameBananaBtn(ICON_FA_PUZZLE_PIECE, T("GameBanana"));
+    IconButton fsBtn(sdl_is_fullscreen() ? ICON_FA_COMPRESS : ICON_FA_EXPAND, sdl_is_fullscreen() ? T("Windowed") : T("Full Screen"));
     IconButton settingsBtn(ICON_FA_GEAR, T("Settings"));
+    const float extraBtnsWidth = (gui_state != GuiState::SelectDisk)
+    		? (questVrBtn.width() + gameBananaBtn.width() + fsBtn.width() + ImGui::GetStyle().ItemSpacing.x * 3.0f)
+    		: 0.0f;
 #if !defined(__ANDROID__) && !defined(TARGET_IPHONE) && !defined(TARGET_UWP) && !defined(__SWITCH__)
-	ImGui::SameLine(0, uiScaled(32));
-	filter.Draw(T("Filter"), ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x
-			- settingsBtn.width() - ImGui::GetStyle().ItemSpacing.x - ImGui::CalcTextSize(T("Filter")).x);
+	ImGui::SameLine(0, uiScaled(28));
+	const float availForFilter = ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x
+			- settingsBtn.width() - extraBtnsWidth - ImGui::GetStyle().ItemSpacing.x - ImGui::CalcTextSize(T("Filter")).x;
+	filter.Draw(T("Filter"), std::max(uiScaled(140.f), std::min(uiScaled(360.f), availForFilter)));
 #endif
     if (gui_state != GuiState::SelectDisk)
     {
 #ifdef TARGET_UWP
-		ImGui::SameLine(ImGui::GetContentRegionMax().x - settingsBtn.width()
+		ImGui::SameLine(ImGui::GetContentRegionMax().x - settingsBtn.width() - extraBtnsWidth
 				- ImGui::GetStyle().FramePadding.x * 2.0f  - ImGui::GetStyle().ItemSpacing.x - ImGui::CalcTextSize(T("Load...")).x);
 		if (ImGui::Button(T("Load...")))
 			gui_load_game();
 		ImGui::SameLine();
 #elif defined(__SWITCH__)
 		IconButton exitBtn(ICON_FA_POWER_OFF, T("Exit"));
-		ImGui::SameLine(ImGui::GetContentRegionMax().x - settingsBtn.width()
+		ImGui::SameLine(ImGui::GetContentRegionMax().x - settingsBtn.width() - extraBtnsWidth
 				- ImGui::GetStyle().ItemSpacing.x - exitBtn.width());
 		if (exitBtn.realize())
 			dc_exit();
 		ImGui::SameLine();
 #else
-		ImGui::SameLine(ImGui::GetContentRegionMax().x - settingsBtn.width());
+		ImGui::SameLine(ImGui::GetContentRegionMax().x - settingsBtn.width() - extraBtnsWidth);
 #endif
+		if (questVrBtn.realize())
+			gui_setState(GuiState::QuestVR);
+		ImGui::SameLine();
+		if (gameBananaBtn.realize())
+			gui_setState(GuiState::GameBanana);
+		ImGui::SameLine();
+		if (fsBtn.realize())
+			sdl_set_fullscreen(!sdl_is_fullscreen());
+		ImGui::SameLine();
 		if (settingsBtn.realize())
 			gui_setState(GuiState::Settings);
     }
@@ -923,6 +985,7 @@ static void gui_display_content()
 			gui_setState(GuiState::Commands);
     }
     ImGui::PopStyleVar();
+    ImGui::Spacing();
 
     scanner.fetch_game_list();
 
@@ -930,7 +993,7 @@ static void gui_display_content()
 	ImGui::BeginChild(ImGui::GetID("library"), ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_DragScrolling);
     {
 		const float totalWidth = ImGui::GetContentRegionMax().x - (!ImGui::GetCurrentWindow()->ScrollbarY ? ImGui::GetStyle().ScrollbarSize : 0);
-		const int itemsPerLine = std::max<int>(totalWidth / (uiScaled(150) + ImGui::GetStyle().ItemSpacing.x), 1);
+		const int itemsPerLine = std::max<int>(totalWidth / (uiScaled(190) + ImGui::GetStyle().ItemSpacing.x), 1);
 		const float responsiveBoxSize = totalWidth / itemsPerLine - ImGui::GetStyle().FramePadding.x * 2;
 		const ImVec2 responsiveBoxVec2 = ImVec2(responsiveBoxSize, responsiveBoxSize);
 
@@ -1395,6 +1458,12 @@ void gui_display_ui()
 	case GuiState::Cheats:
 		gui_cheats();
 		break;
+	case GuiState::QuestVR:
+		gui_quest_vr();
+		break;
+	case GuiState::GameBanana:
+		gui_gamebanana();
+		break;
 	case GuiState::Achievements:
 #ifdef USE_RACHIEVEMENTS
 		achievements::achievementList();
@@ -1536,6 +1605,7 @@ void gui_term()
 	if (inited)
 	{
 		inited = false;
+		QuestBroadcastService::Instance().Stop();
 		scanner.stop();
 		ImGui::DestroyContext();
 	    EventManager::unlisten(Event::Resume, emuEventCallback);

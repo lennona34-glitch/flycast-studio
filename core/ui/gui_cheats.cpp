@@ -99,11 +99,15 @@ void gui_cheats()
 		ImGui::Indent(uiScaled(10));
 		ImGui::Text("%s", (std::string(ICON_FA_MASK "  ") + T("CHEATS")).c_str());
 
+		const char *gbLbl = ICON_FA_PUZZLE_PIECE " GameBanana Studio";
 		const char *addLbl = T("Add");
 		const char *closeLbl = T("Close");
 		const char *loadLbl = T("Load");
-		ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize(addLbl).x  - ImGui::CalcTextSize(closeLbl).x - ImGui::GetStyle().FramePadding.x * 6.f
-			- ImGui::CalcTextSize(loadLbl).x - ImGui::GetStyle().ItemSpacing.x * 2);
+		ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::CalcTextSize(gbLbl).x - ImGui::CalcTextSize(addLbl).x - ImGui::CalcTextSize(closeLbl).x - ImGui::GetStyle().FramePadding.x * 8.f
+			- ImGui::CalcTextSize(loadLbl).x - ImGui::GetStyle().ItemSpacing.x * 3);
+		if (ImGui::Button(gbLbl))
+			gui_setState(GuiState::GameBanana);
+		ImGui::SameLine();
 		if (ImGui::Button(addLbl))
 			ImGui::OpenPopup("addCheat");
 		addCheat();

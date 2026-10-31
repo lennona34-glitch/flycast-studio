@@ -36,6 +36,8 @@
 
 typedef bool (*StringCallback)(bool cancelled, std::string selection);
 
+extern ImFont *boldFont;
+
 void select_file_popup(const char *prompt, StringCallback callback,
 		bool selectFile = false, const std::string& extension = "");
 
@@ -116,7 +118,7 @@ static inline float uiScaled(float f) {
 
 static inline float uiLargeFontSize()
 {
-	return uiScaled(22.f);
+	return uiScaled(27.f);
 }
 
 struct ScaledVec2 : public ImVec2

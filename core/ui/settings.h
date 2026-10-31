@@ -19,6 +19,7 @@
 #pragma once
 #include "game_scanner.h"
 #include "gui_util.h"
+#include "gui_font.h"
 #include "imgui.h"
 #include "oslib/i18n.h"
 #include <array>
@@ -43,11 +44,29 @@ extern int insetLeft, insetRight, insetTop, insetBottom;
 
 inline static void header(const char *title)
 {
-	ImguiStyleVar _(ImGuiStyleVar_ButtonTextAlign, ImVec2(0.f, 0.5f)); // Left
-	ImguiStyleVar _1(ImGuiStyleVar_DisabledAlpha, 1.0f);
-	ImGui::BeginDisabled();
-	ImGui::ButtonEx(title, ImVec2(-1, 0));
-	ImGui::EndDisabled();
+	ImGui::Dummy(ImVec2(0.f, uiScaled(4.f)));
+	ImGuiWindow *win = ImGui::GetCurrentWindow();
+	const float availW = ImGui::GetContentRegionAvail().x;
+	const float barH = ImGui::GetTextLineHeight() + uiScaled(16.f);
+	const ImVec2 pMin = ImGui::GetCursorScreenPos();
+	const ImVec2 pMax = ImVec2(pMin.x + std::max(availW, uiScaled(120.f)), pMin.y + barH);
+
+	ImDrawList *dl = win->DrawList;
+	dl->AddRectFilled(pMin, pMax, IM_COL32(24, 34, 52, 235), uiScaled(7.f));
+	dl->AddRect(pMin, pMax, IM_COL32(62, 88, 132, 140), uiScaled(7.f), 0, 1.0f);
+	// Left accent bar in studio blue
+	dl->AddRectFilled(pMin, ImVec2(pMin.x + uiScaled(5.f), pMax.y), IM_COL32(37, 99, 235, 255), uiScaled(7.f), ImDrawFlags_RoundCornersLeft);
+
+	ImGui::SetCursorScreenPos(ImVec2(pMin.x + uiScaled(16.f), pMin.y + uiScaled(8.f)));
+	if (boldFont)
+		ImGui::PushFont(boldFont, ImGui::GetStyle().FontSizeBase * 1.06f);
+	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.96f, 0.98f, 1.00f, 1.00f));
+	ImGui::TextUnformatted(title);
+	ImGui::PopStyleColor();
+	if (boldFont)
+		ImGui::PopFont();
+
+	ImGui::SetCursorScreenPos(ImVec2(pMin.x, pMax.y + uiScaled(8.f)));
 }
 
 // ImGui InputText char filter for valid DNS names and IPv4/IPv6 addresses

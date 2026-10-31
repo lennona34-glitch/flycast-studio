@@ -70,6 +70,8 @@ enum class GuiState {
 	NetworkStart,
 	Cheats,
 	Achievements,
+	QuestVR,
+	GameBanana,
 };
 extern GuiState gui_state;
 

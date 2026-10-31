@@ -39,7 +39,7 @@ static void manageSinglePath(const char* label, const char *popupName, config::O
 {
     ImVec2 size;
     size.x = 0.0f;
-    size.y = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetStyle().FramePadding.y * 2.f;
+    size.y = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().FramePadding.y * 2.f;
     bool openPopup = false;
     
     ImVec2 childSize;
@@ -47,7 +47,7 @@ static void manageSinglePath(const char* label, const char *popupName, config::O
     {
         ImGui::AlignTextToFramePadding();
         if (pathOption.get().empty()) {
-            ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(24, 3));
+            ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(20, 6));
             std::string buttonLabel = T("Set") + std::string("##") + label;
             openPopup = ImGui::Button(buttonLabel.c_str());
         }
@@ -83,8 +83,7 @@ static void managePathList(const char* label, const char *popupName, std::vector
     ImguiID _(label);
     ImVec2 size;
     size.x = 0.0f;
-    size.y = (ImGui::GetTextLineHeightWithSpacing() + ImGui::GetStyle().FramePadding.y * 2.f)
-                * (paths.size() + 1);
+    size.y = ImGui::GetFrameHeightWithSpacing() * (paths.size() + 1) + ImGui::GetStyle().FramePadding.y * 2.f;
 
     bool openPopup = false;
     ImVec2 childSize;
@@ -104,7 +103,7 @@ static void managePathList(const char* label, const char *popupName, std::vector
                 to_delete = (int)i;
         }
 
-        ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(24, 3));
+        ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(20, 6));
         std::string buttonLabel = T("Add") + std::string("##") + label;
         openPopup = ImGui::Button(buttonLabel.c_str());
 
@@ -269,8 +268,8 @@ void gui_settings_general()
 #if !defined(TARGET_IPHONE)
     ImVec2 size;
     size.x = 0.0f;
-    size.y = (ImGui::GetTextLineHeightWithSpacing() + ImGui::GetStyle().FramePadding.y * 2.f)
-    				* (config::ContentPath.get().size() + 1);
+    size.y = ImGui::GetFrameHeightWithSpacing() * (config::ContentPath.get().size() + 1)
+    				+ ImGui::GetStyle().FramePadding.y * 2.f;
 
     ImVec2 childSize;
     if (beginFrame(T("Content Location"), size, &childSize))
@@ -289,7 +288,7 @@ void gui_settings_general()
         		to_delete = i;
         }
 
-        ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(24, 3));
+        ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(20, 6));
         const bool addContent = ImGui::Button((T("Add") + std::string("##") + "ContentLocation").c_str());
         addContentPath(addContent);
         ImGui::SameLine();
@@ -308,7 +307,7 @@ void gui_settings_general()
     ImGui::SameLine();
     ShowHelpMarker(T("The folders where your games are stored"));
 
-    size.y = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetStyle().FramePadding.y * 2.0f;
+    size.y = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().FramePadding.y * 2.0f;
     ImGui::Spacing();
 
 #if defined(__linux__) && !defined(__ANDROID__)
@@ -330,7 +329,7 @@ void gui_settings_general()
     	float w = childSize.x - ImGui::GetStyle().FramePadding.x;
     	std::string s = middleEllipsis(get_writable_config_path(""), w);
         ImGui::Text("%s", s.c_str());
-        ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(24, 3));
+        ImguiStyleVar _(ImGuiStyleVar_FramePadding, ScaledVec2(20, 6));
 #ifdef __ANDROID__
         {
         	DisabledScope _(!config::UseSafFilePicker);
@@ -507,20 +506,77 @@ void gui_settings_general()
 
 static void applyDarkTheme()
 {
-	// Reset style first, then apply dark colors - exactly like original Flycast
-	ImGui::GetStyle() = ImGuiStyle{};
 	ImGui::StyleColorsDark();
-
-	// Apply original Flycast styling to match exactly how it was
 	ImGuiStyle& style = ImGui::GetStyle();
-	style.TabRounding = 5.0f;
-	style.FrameRounding = 3.0f;
-	style.ItemSpacing = ImVec2(8, 8);		// from 8,4
-	style.ItemInnerSpacing = ImVec2(4, 6);	// from 4,4
 
-	// Reset style properties to defaults to ensure clean theme switching
-	style.TabBorderSize = 0.0f;        // Revert to default
-	style.FrameBorderSize = 0.0f;      // Revert to default
+	// Modern "Obsidian Dreamcast Studio" dark palette
+	style.Colors[ImGuiCol_Text]                  = ImVec4(0.97f, 0.98f, 1.00f, 1.00f); // Crisp off-white
+	style.Colors[ImGuiCol_TextDisabled]          = ImVec4(0.55f, 0.63f, 0.75f, 1.00f); // Slate muted gray
+
+	style.Colors[ImGuiCol_WindowBg]              = ImVec4(0.05f, 0.07f, 0.11f, 1.00f); // Deep obsidian-slate
+	style.Colors[ImGuiCol_ChildBg]               = ImVec4(0.08f, 0.10f, 0.16f, 1.00f); // Elevated card surface
+	style.Colors[ImGuiCol_PopupBg]               = ImVec4(0.07f, 0.10f, 0.15f, 0.99f); // Crisp modal surface
+
+	style.Colors[ImGuiCol_Border]                = ImVec4(0.20f, 0.27f, 0.39f, 0.80f); // Luminous slate border
+	style.Colors[ImGuiCol_BorderShadow]          = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+
+	// Input fields, combo boxes, checkboxes
+	style.Colors[ImGuiCol_FrameBg]               = ImVec4(0.11f, 0.15f, 0.23f, 1.00f);
+	style.Colors[ImGuiCol_FrameBgHovered]        = ImVec4(0.16f, 0.22f, 0.34f, 1.00f);
+	style.Colors[ImGuiCol_FrameBgActive]         = ImVec4(0.20f, 0.29f, 0.45f, 1.00f);
+
+	// Title & menu bars
+	style.Colors[ImGuiCol_TitleBg]               = ImVec4(0.06f, 0.09f, 0.14f, 1.00f);
+	style.Colors[ImGuiCol_TitleBgActive]         = ImVec4(0.10f, 0.18f, 0.34f, 1.00f);
+	style.Colors[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.06f, 0.09f, 0.14f, 0.75f);
+	style.Colors[ImGuiCol_MenuBarBg]             = ImVec4(0.08f, 0.11f, 0.17f, 1.00f);
+
+	// Scrollbars
+	style.Colors[ImGuiCol_ScrollbarBg]           = ImVec4(0.05f, 0.07f, 0.11f, 0.85f);
+	style.Colors[ImGuiCol_ScrollbarGrab]         = ImVec4(0.24f, 0.33f, 0.48f, 1.00f);
+	style.Colors[ImGuiCol_ScrollbarGrabHovered]  = ImVec4(0.33f, 0.46f, 0.66f, 1.00f);
+	style.Colors[ImGuiCol_ScrollbarGrabActive]   = ImVec4(0.35f, 0.65f, 1.00f, 1.00f); // Bright blue active grab
+
+	// Checkmarks, radio button dots & Sliders (all matching studio blue)
+	style.Colors[ImGuiCol_CheckMark]             = ImVec4(0.28f, 0.62f, 1.00f, 1.00f); // Vibrant Studio Blue (ticks & radio dots)
+	style.Colors[ImGuiCol_SliderGrab]            = ImVec4(0.25f, 0.55f, 0.95f, 1.00f); // Electric Cobalt
+	style.Colors[ImGuiCol_SliderGrabActive]      = ImVec4(0.38f, 0.70f, 1.00f, 1.00f); // Bright blue active grab
+
+	// Buttons
+	style.Colors[ImGuiCol_Button]                = ImVec4(0.15f, 0.34f, 0.68f, 1.00f); // Rich Cobalt Blue
+	style.Colors[ImGuiCol_ButtonHovered]         = ImVec4(0.23f, 0.48f, 0.90f, 1.00f); // Vibrant Cobalt hover
+	style.Colors[ImGuiCol_ButtonActive]          = ImVec4(0.18f, 0.45f, 0.85f, 1.00f); // Deep blue active press
+
+	// Headers & Selectables
+	style.Colors[ImGuiCol_Header]                = ImVec4(0.14f, 0.25f, 0.46f, 0.90f);
+	style.Colors[ImGuiCol_HeaderHovered]         = ImVec4(0.20f, 0.38f, 0.68f, 1.00f);
+	style.Colors[ImGuiCol_HeaderActive]          = ImVec4(0.25f, 0.46f, 0.82f, 1.00f);
+
+	// Separators
+	style.Colors[ImGuiCol_Separator]             = ImVec4(0.22f, 0.30f, 0.44f, 0.80f);
+	style.Colors[ImGuiCol_SeparatorHovered]      = ImVec4(0.35f, 0.55f, 0.88f, 1.00f);
+	style.Colors[ImGuiCol_SeparatorActive]       = ImVec4(0.35f, 0.70f, 1.00f, 1.00f);
+
+	// Tabs
+	style.Colors[ImGuiCol_Tab]                   = ImVec4(0.10f, 0.15f, 0.24f, 1.00f);
+	style.Colors[ImGuiCol_TabHovered]            = ImVec4(0.22f, 0.44f, 0.82f, 1.00f);
+	style.Colors[ImGuiCol_TabActive]             = ImVec4(0.18f, 0.38f, 0.74f, 1.00f);
+	style.Colors[ImGuiCol_TabUnfocused]          = ImVec4(0.08f, 0.12f, 0.19f, 1.00f);
+	style.Colors[ImGuiCol_TabUnfocusedActive]    = ImVec4(0.14f, 0.28f, 0.54f, 1.00f);
+
+	// Tables
+	style.Colors[ImGuiCol_TableHeaderBg]         = ImVec4(0.11f, 0.17f, 0.28f, 1.00f);
+	style.Colors[ImGuiCol_TableBorderStrong]     = ImVec4(0.22f, 0.31f, 0.46f, 1.00f);
+	style.Colors[ImGuiCol_TableBorderLight]      = ImVec4(0.16f, 0.22f, 0.33f, 0.80f);
+	style.Colors[ImGuiCol_TableRowBg]            = ImVec4(0.06f, 0.09f, 0.14f, 1.00f);
+	style.Colors[ImGuiCol_TableRowBgAlt]         = ImVec4(0.09f, 0.12f, 0.19f, 1.00f);
+
+	style.Colors[ImGuiCol_TextSelectedBg]        = ImVec4(0.23f, 0.51f, 0.96f, 0.40f);
+
+	style.TabBorderSize   = 0.0f;
+	style.FrameBorderSize = 1.0f;
+	style.ChildBorderSize = 1.0f;
+	style.PopupBorderSize = 1.0f;
 }
 
 static void applyLightTheme()
@@ -603,10 +659,10 @@ static void applyDreamcastTheme()
 	style.Colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.95f, 0.95f, 0.95f, 1.00f); // Fully opaque when hovered
 	style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.95f, 0.95f, 0.95f, 1.00f); // Fully opaque when active
 
-	// Controller button colors - more vibrant
-	style.Colors[ImGuiCol_Button] = ImVec4(0.90f, 0.50f, 0.10f, 1.00f);        // Brighter orange buttons
-	style.Colors[ImGuiCol_ButtonHovered] = ImVec4(1.00f, 0.70f, 0.40f, 1.00f); // Brighter when hovered
-	style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.95f, 0.45f, 0.00f, 1.00f);  // Brighter when active
+	// Controller button colors
+	style.Colors[ImGuiCol_Button] = ImVec4(0.15f, 0.35f, 0.70f, 1.00f);        // Studio blue buttons
+	style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.22f, 0.45f, 0.85f, 1.00f); // Brighter when hovered
+	style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.12f, 0.28f, 0.58f, 1.00f);  // Darker when active
 
 	style.Colors[ImGuiCol_PopupBg] = ImVec4(0.05f, 0.07f, 0.10f, 1.00f);       // Darker DC Menu Background (100% opaque)
 	style.Colors[ImGuiCol_FrameBg] = ImVec4(0.15f, 0.17f, 0.22f, 1.00f);       // Darker DC Menu (fully opaque)
@@ -630,10 +686,10 @@ static void applyDreamcastTheme()
 	style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.25f, 0.30f, 0.60f, 1.00f); // Brighter for unfocused active (fully opaque)
 
 	// Other elements - more vibrant
-	style.Colors[ImGuiCol_Border] = ImVec4(1.00f, 0.85f, 0.25f, 0.70f);         // Brighter DC "X" yellow borders (some transparency ok)
+	style.Colors[ImGuiCol_Border] = ImVec4(0.20f, 0.40f, 0.70f, 0.70f);         // Blue borders
 	style.Colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);   // No border shadows
 	style.Colors[ImGuiCol_Separator] = ImVec4(0.00f, 0.50f, 0.80f, 0.75f);      // Brighter DC Logo Blue separators (some transparency ok)
-	style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(1.00f, 0.50f, 0.00f, 0.35f); // DC Swirl Orange selection (transparency ok)
+	style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.20f, 0.45f, 0.85f, 0.35f); // Blue selection (transparency ok)
 
 	// Table colors - more vibrant
 	style.Colors[ImGuiCol_TableHeaderBg] = ImVec4(0.15f, 0.18f, 0.45f, 1.00f);  // Brighter X Button Blue for headers (fully opaque)
@@ -679,10 +735,10 @@ static void applyHighContrastTheme()
 	style.Colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.00f, 0.65f, 0.90f, 1.00f);  // DC Highlight Blue when active
 
 	// Interactive elements
-	style.Colors[ImGuiCol_CheckMark] = ImVec4(1.00f, 0.50f, 0.00f, 1.00f);      // DC Swirl Orange for checkmarks
+	style.Colors[ImGuiCol_CheckMark] = ImVec4(0.28f, 0.62f, 1.00f, 1.00f);      // Studio blue for checkmarks & radio dots
 
 	style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.00f, 0.65f, 0.90f, 1.00f);     // DC Highlight Blue for sliders
-	style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(1.00f, 0.50f, 0.00f, 1.00f); // DC Swirl Orange when active
+	style.Colors[ImGuiCol_SliderGrabActive] = ImVec4(0.35f, 0.70f, 1.00f, 1.00f); // Bright blue when active
 
 	// Buttons
 	style.Colors[ImGuiCol_Button] = ImVec4(0.00f, 0.43f, 0.73f, 1.00f);         // DC Logo Blue buttons
@@ -708,7 +764,7 @@ static void applyHighContrastTheme()
 
 	// Other UI elements
 	style.Colors[ImGuiCol_Separator] = ImVec4(1.00f, 1.00f, 1.00f, 0.40f);      // Semi-transparent white separators (transparency ok)
-	style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(1.00f, 0.50f, 0.00f, 0.35f); // Semi-transparent DC Swirl Orange selection (transparency ok)
+	style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(0.20f, 0.45f, 0.85f, 0.35f); // Blue selection (transparency ok)
 
 	// Increase contrast even more
 	style.Alpha = 1.0f;                // No transparency

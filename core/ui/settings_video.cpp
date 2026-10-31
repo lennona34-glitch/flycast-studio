@@ -19,6 +19,7 @@
 #include "settings.h"
 #include "gui.h"
 #include "wsi/context.h"
+#include "sdl/sdl.h"
 
 enum RenderAPI {
 	OpenGL,
@@ -201,6 +202,15 @@ void gui_settings_video()
         ImGui::Text("%s", T("Internal Resolution"));
         ImGui::SameLine();
         ShowHelpMarker(T("Internal render resolution. Higher is better, but more demanding on the GPU. Values higher than your display resolution (but no more than double your display resolution) can be used for supersampling, which provides high-quality antialiasing without reducing sharpness."));
+#if !defined(GLES) && !defined(__SWITCH__)
+		bool fs = sdl_is_fullscreen();
+		if (ImGui::Checkbox(T("Full Screen (Immersive Desktop)"), &fs))
+		{
+			sdl_set_fullscreen(fs);
+		}
+		ImGui::SameLine();
+		ShowHelpMarker(T("Launch and run Flycast-XR and all games in borderless immersive full screen mode (Alt+Enter to toggle)"));
+#endif
 		OptionCheckbox(T("Integer Scaling"), config::IntegerScale, T("Scales the output by the maximum integer multiple allowed by the display resolution."));
 		OptionCheckbox(T("Linear Interpolation"), config::LinearInterpolation, T("Scales the output with linear interpolation. Will use nearest neighbor interpolation otherwise. Disable with integer scaling."));
 #ifndef TARGET_IPHONE

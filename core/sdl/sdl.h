@@ -10,3 +10,5 @@ void sdl_window_destroy();
 bool sdl_recreate_window(u32 flags);
 bool sdl_update_display_metrics(SDL_Window *window, u32 windowFlags);
 void sdl_fix_steamdeck_dpi(SDL_Window *window);
+void sdl_set_fullscreen(bool fullscreen);
+bool sdl_is_fullscreen();

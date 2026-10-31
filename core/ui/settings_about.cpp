@@ -48,9 +48,9 @@ static void customDriverCallback(bool cancelled, std::string selection)
 
 void gui_settings_about()
 {
-    header("Flycast");
+    header("Flycast-XR Studio");
     {
-		ImGui::Text(T("Version: %s"), GIT_VERSION);
+		ImGui::Text(T("Version: %s (Flycast-XR VR Edition)"), GIT_VERSION);
 		ImGui::Text(T("Git Hash: %s"), GIT_HASH);
 		ImGui::Text(T("Build Date: %s"), BUILD_DATE);
     }

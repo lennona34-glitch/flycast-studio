@@ -24,6 +24,8 @@
 #include "hw/maple/maple_if.h"
 #include "imgui_stdlib.h"
 #include "input/dreampotato.h"
+#include "gui_quest_vr.h"
+#include "gui_gamebanana.h"
 
 #ifdef GDB_SERVER
 #include "hw/mem/addrspace.h"
@@ -214,7 +216,7 @@ void gui_display_settings()
     		| ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 	ImVec2 normal_padding = ImGui::GetStyle().FramePadding;
 
-    if (ImGui::Button(T("Done"), ScaledVec2(100, 30)))
+    if (ImGui::Button(T("Done"), ScaledVec2(120, 38)))
     {
     	if (uiUserScaleUpdated)
     	{
@@ -256,7 +258,7 @@ void gui_display_settings()
 		ImguiStyleVar _(ImGuiStyleVar_FramePadding, ImVec2(uiScaled(16), normal_padding.y));
 		if (config::Settings::instance().hasPerGameConfig())
 		{
-			if (ImGui::Button(T("Delete Game Config"), ScaledVec2(0, 30)))
+			if (ImGui::Button(T("Delete Game Config"), ScaledVec2(0, 38)))
 			{
 				config::Settings::instance().setPerGameConfig(false);
 				config::Settings::instance().load(false);
@@ -265,59 +267,95 @@ void gui_display_settings()
 		}
 		else
 		{
-			if (ImGui::Button(T("Make Game Config"), ScaledVec2(0, 30)))
+			if (ImGui::Button(T("Make Game Config"), ScaledVec2(0, 38)))
 				config::Settings::instance().setPerGameConfig(true);
 		}
 	}
+	ImGui::Spacing();
 
 	if (ImGui::GetContentRegionAvail().x >= uiScaled(650.f))
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(16, 6));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(18, 10));
 	else
 		// low width
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(4, 6));
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ScaledVec2(10, 8));
+
+	const float comfortableItemWidth = std::max(uiScaled(220.f), std::min(uiScaled(380.f), ImGui::GetContentRegionAvail().x * 0.45f));
 
     if (ImGui::BeginTabBar("settings", ImGuiTabBarFlags_NoTooltip | ImGuiTabBarFlags_NoTabListScrollingButtons))
     {
 		if (beginTabItem(ICON_FA_TOOLBOX, T("General")))
 		{
 			ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+			ImGui::Spacing();
+			ImGui::PushItemWidth(comfortableItemWidth);
 			gui_settings_general();
+			ImGui::PopItemWidth();
 			ImGui::EndTabItem();
 		}
 		if (beginTabItem(ICON_FA_GAMEPAD, T("Controls")))
 		{
 			ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+			ImGui::Spacing();
+			ImGui::PushItemWidth(comfortableItemWidth);
 			gui_settings_controls(mapleDevicesChanges, expDevicesChanges);
+			ImGui::PopItemWidth();
 			ImGui::EndTabItem();
 		}
 		if (beginTabItem(ICON_FA_DISPLAY, T("Video")))
 		{
 			ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+			ImGui::Spacing();
+			ImGui::PushItemWidth(comfortableItemWidth);
 			gui_settings_video();
+			ImGui::PopItemWidth();
 			ImGui::EndTabItem();
 		}
 		if (beginTabItem(ICON_FA_MUSIC, T("Audio")))
 		{
 			ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+			ImGui::Spacing();
+			ImGui::PushItemWidth(comfortableItemWidth);
 			gui_settings_audio();
+			ImGui::PopItemWidth();
 			ImGui::EndTabItem();
 		}
 		if (beginTabItem(ICON_FA_WIFI, T("Network")))
 		{
 			ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+			ImGui::Spacing();
+			ImGui::PushItemWidth(comfortableItemWidth);
 			gui_settings_network();
+			ImGui::PopItemWidth();
 			ImGui::EndTabItem();
 		}
 		if (beginTabItem(ICON_FA_MICROCHIP, T("Advanced")))
 		{
 			ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+			ImGui::Spacing();
+			ImGui::PushItemWidth(comfortableItemWidth);
 			gui_settings_advanced();
+			ImGui::PopItemWidth();
+			ImGui::EndTabItem();
+		}
+		if (beginTabItem(ICON_FA_VR_CARDBOARD, T("Quest VR")))
+		{
+			ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+			ImGui::Spacing();
+			gui_settings_quest_vr();
+			ImGui::EndTabItem();
+		}
+		if (beginTabItem(ICON_FA_PUZZLE_PIECE, T("GameBanana")))
+		{
+			ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+			ImGui::Spacing();
+			gui_settings_gamebanana();
 			ImGui::EndTabItem();
 		}
 #if !defined(NDEBUG) || defined(DEBUGFAST) || FC_PROFILER
 		if (beginTabItem(ICON_FA_BUG, "Debug"))
 		{
 			ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+			ImGui::Spacing();
 			gui_debug_tab();
 			ImGui::EndTabItem();
 		}
@@ -325,6 +363,7 @@ void gui_display_settings()
 		if (beginTabItem(ICON_FA_CIRCLE_INFO, T("About")))
 		{
 			ImguiStyleVar _(ImGuiStyleVar_FramePadding, normal_padding);
+			ImGui::Spacing();
 			gui_settings_about();
 			ImGui::EndTabItem();
 		}
