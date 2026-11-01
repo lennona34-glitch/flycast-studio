@@ -82,9 +82,7 @@ static const DreamcastGameEntry kDreamcastGames[] = {
 	{ "Sonic Adventure (Dreamcast / DX)", "MK-51000", 5892 },
 	{ "Sonic Adventure 2 (Dreamcast / Battle)", "MK-51117", 5855 },
 	{ "Jet Set Radio / Jet Grind Radio", "MK-51058", 6340 },
-	{ "Marvel vs. Capcom 2: New Age of Heroes", "T1212N", 0 },
-	{ "Capcom vs. SNK 2: Mark of the Millennium 2001", "HDR-0165", 0 },
-	{ "SoulCalibur", "T1401N", 0 },
+	{ "Sega Rally 2", "HDR-0010", 21342 },
 	{ "Crazy Taxi", "MK-51035", 6341 },
 	{ "Crazy Taxi 2", "MK-51136", 6341 },
 	{ "Shenmue", "MK-51059", 7623 },
@@ -92,14 +90,20 @@ static const DreamcastGameEntry kDreamcastGames[] = {
 	{ "Resident Evil - Code: Veronica", "T1204N", 7001 },
 	{ "Skies of Arcadia", "MK-51052", 18776 },
 	{ "Phantasy Star Online Ver. 2", "MK-51193", 8597 },
-	{ "Power Stone 2", "T1211N", 0 },
 	{ "Dead or Alive 2", "T3601N", 19198 },
+	{ "ChuChu Rocket! (Dreamcast)", "MK-51048", 19869 },
+	{ "Puyo Pop Fever (Dreamcast)", "HDR-0205", 8178 },
+	{ "Sega Bass Fishing", "MK-51011", 10548 },
+	{ "Quake III Arena", "T40205N", 289 },
+	{ "Rayman 2: The Great Escape", "T17704N", 6305 },
+	{ "Marvel vs. Capcom 2: New Age of Heroes", "T1212N", 0 },
+	{ "Capcom vs. SNK 2: Mark of the Millennium 2001", "HDR-0165", 0 },
+	{ "SoulCalibur", "T1401N", 0 },
+	{ "Power Stone 2", "T1211N", 0 },
 	{ "Street Fighter III: 3rd Strike", "T1213N", 0 },
 	{ "Guilty Gear X (Dreamcast / NAOMI)", "T2401M", 0 },
 	{ "Tony Hawk's Pro Skater 2", "T13006N", 0 },
-	{ "Quake III Arena", "T40205N", 289 },
 	{ "Unreal Tournament", "T40209N", 242 },
-	{ "Rayman 2: The Great Escape", "T17704N", 6305 },
 	{ "Grandia II", "T17714N", 0 },
 	{ "Space Channel 5 Part 2", "HDR-0190", 0 },
 	{ "Ikaruga", "HDR-0203", 0 },
@@ -128,6 +132,7 @@ struct GameBananaModItem
 	std::string submitter;
 	std::string category;
 	std::string game_name;
+	int game_id = 0;
 	std::string profile_url;
 	std::string description;
 	int likes = 0;
@@ -1129,6 +1134,90 @@ static void FetchModDetailsAsync(int mod_idx)
 	}).detach();
 }
 
+static std::string ToLowerString(std::string str)
+{
+	std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
+		return (char)std::tolower(c);
+	});
+	return str;
+}
+
+static std::string CleanGameTitle(std::string str)
+{
+	const size_t paren = str.find(" (");
+	if (paren != std::string::npos)
+		str = str.substr(0, paren);
+	const size_t slash = str.find(" / ");
+	if (slash != std::string::npos)
+		str = str.substr(0, slash);
+	const size_t colon = str.find(": ");
+	if (colon != std::string::npos)
+		str = str.substr(0, colon);
+	return str;
+}
+
+static bool MatchesGameFilter(const GameBananaModItem& item, int selected_game_idx, int gb_game_id, const std::string& game_label)
+{
+	const std::string item_game = ToLowerString(item.game_name);
+
+	// Case 1: User chose a specific game in the dropdown
+	if (selected_game_idx > 0)
+	{
+		// Exact match against verified GameBanana game ID
+		if (gb_game_id > 0)
+		{
+			if (item.game_id > 0)
+				return item.game_id == gb_game_id;
+		}
+
+		// Textual matching against the selected game's title
+		const std::string clean_title = ToLowerString(CleanGameTitle(game_label));
+		if (!clean_title.empty())
+		{
+			if (item_game.find(clean_title) != std::string::npos)
+				return true;
+		}
+
+		// If it did not match the game ID or clean game title, reject it
+		return false;
+	}
+
+	// Case 2: User chose "All Sega Dreamcast / NAOMI / Atomiswave Games" (selected_game_idx == 0)
+	// Filter out non-emulator modern PC/console platforms returned by GameBanana's broad search
+	static const char* const kBannedHostGames[] = {
+		"super smash bros",
+		"smash bros",
+		"team fortress",
+		"left 4 dead",
+		"garry's mod",
+		"friday night funkin",
+		"minecraft",
+		"roblox",
+		"grand theft auto",
+		"pizza tower",
+		"baldi",
+		"fire emblem",
+		"guilty gear -strive-",
+		"street fighter 6",
+		"counter-strike",
+		"half-life",
+		"portal",
+		"fall guys",
+		"among us",
+		"payday",
+		"the sims",
+		"gamebanana"
+	};
+
+	for (const char* banned : kBannedHostGames)
+	{
+		if (item_game.find(banned) != std::string::npos)
+			return false;
+	}
+
+	return true;
+}
+
 static void TriggerGameBananaSearch()
 {
 	if (g_gb.busy.load())
@@ -1255,10 +1344,12 @@ static void TriggerGameBananaSearch()
 						if (obj.contains("_aGame") && obj["_aGame"].is_object())
 						{
 							const auto& gm = obj["_aGame"];
+							if (gm.contains("_idRow") && gm["_idRow"].is_number())
+								item.game_id = gm["_idRow"].get<int>();
 							if (gm.contains("_sName") && gm["_sName"].is_string())
 								item.game_name = gm["_sName"].get<std::string>();
 						}
-						if (item.id > 0 && !item.name.empty())
+						if (item.id > 0 && !item.name.empty() && MatchesGameFilter(item, game_idx, gb_game_id, game_label))
 							results.push_back(std::move(item));
 					}
 				}
@@ -1329,10 +1420,12 @@ static void TriggerGameBananaSearch()
 							if (obj.contains("_aGame") && obj["_aGame"].is_object())
 							{
 								const auto& gm = obj["_aGame"];
+								if (gm.contains("_idRow") && gm["_idRow"].is_number())
+									item.game_id = gm["_idRow"].get<int>();
 								if (gm.contains("_sName") && gm["_sName"].is_string())
 									item.game_name = gm["_sName"].get<std::string>();
 							}
-							if (item.id > 0 && !item.name.empty())
+							if (item.id > 0 && !item.name.empty() && MatchesGameFilter(item, game_idx, gb_game_id, game_label))
 								results.push_back(std::move(item));
 						}
 					}
