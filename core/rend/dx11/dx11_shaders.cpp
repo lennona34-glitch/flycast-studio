@@ -414,6 +414,7 @@ const char * const QuadPixelShader = R"(
 cbuffer constantBuffer : register(b0)
 {
 	float4 color;
+	float4 crtParams; // x: mode (0=off, 1=Arcade, 2=Dreamcast VGA, 3=Curved, 4=Light Scanlines), y: scanline height, z: intensity, w: curvature
 };
 
 struct VertexIn
@@ -427,7 +428,55 @@ Texture2D texture0;
 
 float4 main(in VertexIn vin) : SV_Target
 {
-	return color * texture0.Sample(sampler0, vin.uv);
+	float2 uv = vin.uv;
+	int mode = (int)(crtParams.x + 0.5f);
+
+	if (mode <= 0)
+	{
+		return color * texture0.Sample(sampler0, uv);
+	}
+
+	// Mode 3: Curved Arcade Tube
+	if (mode == 3)
+	{
+		float2 c = uv - 0.5f;
+		float dist = dot(c, c);
+		uv = uv + c * dist * 0.12f;
+		if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f)
+			return float4(0.0f, 0.0f, 0.0f, 1.0f);
+	}
+
+	float4 tex = texture0.Sample(sampler0, uv);
+
+	// Authentic 480p Dreamcast scanlines
+	float lines = crtParams.y > 0.0f ? crtParams.y : 480.0f;
+	float scanline = sin(uv.y * lines * 3.14159265f);
+	scanline = scanline * scanline;
+
+	float scan_weight = crtParams.z > 0.0f ? crtParams.z : 0.28f;
+	float scan_mult = 1.0f - (scan_weight * (1.0f - scanline));
+
+	float3 rgb = tex.rgb * scan_mult;
+
+	// Mode 1: Arcade Aperture Grille phosphor subpixels
+	if (mode == 1)
+	{
+		int px = (int)vin.pos.x % 3;
+		float3 mask = float3(1.04f, 0.92f, 0.92f);
+		if (px == 1)
+			mask = float3(0.92f, 1.04f, 0.92f);
+		else if (px == 2)
+			mask = float3(0.92f, 0.92f, 1.04f);
+		rgb *= mask;
+	}
+	// Mode 2: Dreamcast VGA Glow
+	else if (mode == 2)
+	{
+		float lum = dot(rgb, float3(0.299f, 0.587f, 0.114f));
+		rgb = lerp(float3(lum, lum, lum), rgb, 1.15f) * 1.06f;
+	}
+
+	return color * float4(rgb, tex.a);
 }
 
 )";

@@ -3,6 +3,7 @@
 #include "gui_util.h"
 #include "IconsFontAwesome6.h"
 #include "settings.h"
+#include "cfg/option.h"
 #include "oslib/i18n.h"
 
 #include <atomic>
@@ -37,6 +38,7 @@ struct CRTPreset
 };
 
 static const CRTPreset kCRTPresets[] = {
+	{ "Disabled / Raw Digital Pixels", "", "Disables ReShade post-processing for clean, raw digital rendering." },
 	{ "CRT-Geom (Arcade Curved Tube & Natural Scanlines)", "GeomCRT@CRTGeom.fx", "Classic curved arcade CRT with subtle phosphors, bloom, and natural scanlines." },
 	{ "CRT-Lottes (Bright Trinitron Aperture Grille)", "LottesCRT@CRTLottes.fx", "Bright aperture grille monitor style; optimal for fast arcade fighters and racing." },
 	{ "CRT-Easymode (Fast & Crisp Retro Scanlines)", "EasymodeCRT@CRTEasymode.fx", "Zero-latency, ultra-crisp scanline simulation with minimal brightness loss." },
@@ -48,8 +50,7 @@ static const CRTPreset kCRTPresets[] = {
 	{ "zfast_crt (Lightweight Pixel-Perfect CRT)", "CRTZFast@zfast_crt.fx", "Lightweight pixel-perfect CRT filter optimized for high frame rates." },
 	{ "CRT-NewPixie (Nostalgic Curvature & Trail)", "CRTNewPixie@CRT-NewPixie.fx", "Stylized 90s CRT monitor with subtle phosphor persistence." },
 	{ "NTSC Composite (RetroArch NTSC Artifacts)", "NTSC_RetroArch@NTSC_RetroArch.fx", "Composite video signal emulation with classic color fringing and RF artifacts." },
-	{ "VHS Distortion (Vintage VHS Camcorder)", "VHS_RA@VHS_RA.fx", "Authentic 90s tape glitch and tracking distortion." },
-	{ "Disabled / Raw Digital Pixels", "", "Disables post-processing filters for clean, raw digital rendering." }
+	{ "VHS Distortion (Vintage VHS Camcorder)", "VHS_RA@VHS_RA.fx", "Authentic 90s tape glitch and tracking distortion." }
 };
 
 static const size_t kPresetCount = sizeof(kCRTPresets) / sizeof(kCRTPresets[0]);
@@ -143,35 +144,54 @@ void SetCRTPreset(const std::string& technique_spec)
 		if (out.is_open())
 		{
 			out << "Techniques=" << technique_spec << "\n";
-			out << "TechniqueSorting=" << technique_spec << "\n";
+			out << "TechniqueSorting=" << technique_spec << "\n\n";
+
+			// Inject high-resolution parameters so scanlines match modern monitors instead of 320x240
+			if (technique_spec.find("GeomCRT") != std::string::npos)
+			{
+				out << "[CRTGeom.fx]\n";
+				out << "texture_sizeX=1440.000000\n";
+				out << "texture_sizeY=1080.000000\n";
+				out << "video_sizeX=1440.000000\n";
+				out << "video_sizeY=1080.000000\n";
+				out << "CURVATURE=0.000000\n";
+				out << "scanline_weight=0.220000\n";
+			}
+			else if (technique_spec.find("EasymodeCRT") != std::string::npos)
+			{
+				out << "[CRTEasymode.fx]\n";
+				out << "texture_sizeX=1440.000000\n";
+				out << "texture_sizeY=1080.000000\n";
+				out << "video_sizeX=1440.000000\n";
+				out << "video_sizeY=1080.000000\n";
+				out << "SCANLINE_STRENGTH=0.400000\n";
+				out << "MASK_STRENGTH=0.200000\n";
+			}
 			out.close();
 		}
 
-		// Ensure ReShade.ini exists and references ReShadePreset.ini
+		// Ensure ReShade.ini has tutorial disabled in [OVERLAY]
 		fs::path iniPath = appDir / "ReShade.ini";
-		std::error_code ec;
-		if (!fs::exists(iniPath, ec))
+		std::ofstream iniOut(iniPath, std::ios::trunc);
+		if (iniOut.is_open())
 		{
-			std::ofstream iniOut(iniPath, std::ios::trunc);
-			if (iniOut.is_open())
-			{
-				iniOut << "[GENERAL]\n";
-				iniOut << "EffectSearchPaths=.\\reshade-shaders\\Shaders\n";
-				iniOut << "TextureSearchPaths=.\\reshade-shaders\\Textures\n";
-				iniOut << "IntermediateCachePath=.\\reshade-shaders\\Intermediate\n";
-				iniOut << "PresetPath=.\\ReShadePreset.ini\n";
-				iniOut << "CurrentPresetPath=.\\ReShadePreset.ini\n";
-				iniOut << "PerformanceMode=0\n";
-				iniOut << "ShowClock=0\n";
-				iniOut << "ShowFPS=0\n";
-				iniOut << "NoFontScaling=0\n";
-				iniOut << "NoReloadOnInit=0\n";
-				iniOut << "KeyMenu=36,0,0,0\n";
-				iniOut << "KeyOverlay=36,0,0,0\n";
-				iniOut << "NoWelcomeScreen=1\n";
-				iniOut << "TutorialProgress=4\n";
-				iniOut.close();
-			}
+			iniOut << "[GENERAL]\n";
+			iniOut << "EffectSearchPaths=.\\reshade-shaders\\Shaders\n";
+			iniOut << "TextureSearchPaths=.\\reshade-shaders\\Textures\n";
+			iniOut << "IntermediateCachePath=.\\reshade-shaders\\Intermediate\n";
+			iniOut << "PresetPath=.\\ReShadePreset.ini\n";
+			iniOut << "CurrentPresetPath=.\\ReShadePreset.ini\n";
+			iniOut << "PerformanceMode=0\n";
+			iniOut << "ShowClock=0\n";
+			iniOut << "ShowFPS=0\n";
+			iniOut << "NoFontScaling=0\n";
+			iniOut << "NoReloadOnInit=0\n";
+			iniOut << "KeyMenu=36,0,0,0\n";
+			iniOut << "KeyOverlay=36,0,0,0\n\n";
+			iniOut << "[OVERLAY]\n";
+			iniOut << "TutorialProgress=4\n";
+			iniOut << "ShowOverlay=0\n";
+			iniOut.close();
 		}
 	}
 	catch (...)
@@ -193,7 +213,6 @@ static void RunDownloadInstallWorker()
 	fs::create_directories(shadersDir, ec);
 	fs::create_directories(texturesDir, ec);
 
-	// PowerShell helper script that downloads ReShade 64-bit and RSRetroArch CRT shaders
 	std::string script =
 		"$ErrorActionPreference = 'Stop'\n"
 		"$appDir = '" + appDir.string() + "'\n"
@@ -247,18 +266,15 @@ static void RunDownloadInstallWorker()
 
 	if (CreateProcessW(nullptr, cmdBuf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi))
 	{
-		WaitForSingleObject(pi.hProcess, 90000); // Wait up to 90 seconds
+		WaitForSingleObject(pi.hProcess, 90000);
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
 	}
 
 	fs::remove(scriptPath, ec);
 
-	// Ensure default preset is activated if none is currently selected
-	if (GetCurrentCRTPreset().empty())
-	{
-		SetCRTPreset("GeomCRT@CRTGeom.fx");
-	}
+	// Start with empty preset so UI is 100% clean and readable
+	SetCRTPreset("");
 
 	if (IsReShadeInstalled())
 	{
@@ -285,22 +301,76 @@ void StartCRTDownloadInstall()
 void gui_settings_crt_shaders()
 {
 	ImGui::Spacing();
-	header(T("CRT & Retro Shaders (ReShade Suite)"));
+
+	// SECTION 1: NATIVE DREAMCAST & ARCADE CRT SHADER (Zero UI blur, applies strictly to games)
+	header(T("Dreamcast & Arcade CRT Filter (Native In-Engine)"));
+	ImGui::TextWrapped("%s", T("Applies authentic retro CRT scanlines and phosphor aperture grille exclusively to the game rendering. All Flycast menus, game library covers, text, and pause buttons remain 100% crisp, sharp, and readable at full resolution!"));
+
+	ImGui::Spacing();
+	ImGui::Text("%s", T("Native CRT Profile:"));
+	ImGui::SameLine(0, uiScaled(10));
+
+	auto NativeCrtButton = [](const char* label, int filterVal) {
+		bool active = (config::CrtFilter == filterVal);
+		if (active)
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.45f, 0.85f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.55f, 0.95f, 1.0f));
+		}
+		if (ImGui::Button(label, ScaledVec2(120, 28)))
+		{
+			config::CrtFilter = filterVal;
+		}
+		if (active)
+		{
+			ImGui::PopStyleColor(2);
+		}
+		ImGui::SameLine(0, uiScaled(8));
+	};
+
+	NativeCrtButton(T("Off (Crisp 1440p)"), 0);
+	NativeCrtButton(T("Arcade CRT"), 1);
+	NativeCrtButton(T("Dreamcast VGA"), 2);
+	NativeCrtButton(T("Curved Tube"), 3);
+	NativeCrtButton(T("Clean Scanlines"), 4);
+
+	ImGui::NewLine();
+	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.75f, 1.0f, 1.0f));
+	switch (config::CrtFilter)
+	{
+	case 1:
+		ImGui::TextWrapped("%s %s", ICON_FA_TV, T("Active: Arcade CRT — Trinitron RGB phosphor subpixel mask with natural 480p scanlines."));
+		break;
+	case 2:
+		ImGui::TextWrapped("%s %s", ICON_FA_TV, T("Active: Dreamcast VGA CRT — Clean 480p scanlines with vibrant color saturation and subtle phosphor glow."));
+		break;
+	case 3:
+		ImGui::TextWrapped("%s %s", ICON_FA_TV, T("Active: Curved Tube CRT — Authentic curved arcade cabinet screen with barrel distortion and scanlines."));
+		break;
+	case 4:
+		ImGui::TextWrapped("%s %s", ICON_FA_TV, T("Active: Clean Scanlines — Lightweight 480p line grid without phosphor mask darkening."));
+		break;
+	default:
+		ImGui::TextWrapped("%s %s", ICON_FA_TV, T("Active: Native Raw Rendering — Zero scanlines, razor-sharp internal resolution."));
+		break;
+	}
+	ImGui::PopStyleColor();
+
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	// SECTION 2: RESHADE ADVANCED SUITE (Optional external injector)
+	header(T("ReShade CRT & Retro Shader Suite (70+ External Shaders)"));
 
 	const bool is_installed = IsReShadeInstalled();
 	float progress = 0.0f;
 	std::string status = GetInstallStatus(progress);
 
-	// Description banner
-	ImGui::TextWrapped("%s", T("Transform Sega Dreamcast, NAOMI, and Atomiswave games with authentic arcade & CRT television aesthetics. Renders hardware phosphor masks, curved glass tubes, scanlines, bloom, and NTSC color fringing directly over the DirectX 11 / Vulkan swapchain with zero emulation lag."));
-
-	ImGui::Spacing();
-
-	// Status badge row
 	if (is_installed)
 	{
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.20f, 0.85f, 0.40f, 1.0f));
-		ImGui::Text("%s %s", ICON_FA_CHECK, T("ReShade CRT Engine: Installed & Active (DirectX 11)"));
+		ImGui::Text("%s %s", ICON_FA_CHECK, T("ReShade Engine: Installed & Active (DirectX 11)"));
 		ImGui::PopStyleColor();
 
 		ImGui::SameLine(0, uiScaled(20));
@@ -315,7 +385,7 @@ void gui_settings_crt_shaders()
 	else
 	{
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.65f, 0.20f, 1.0f));
-		ImGui::Text("%s %s", ICON_FA_DOWNLOAD, T("ReShade CRT Engine: Not Installed"));
+		ImGui::Text("%s %s", ICON_FA_DOWNLOAD, T("ReShade Engine: Not Installed"));
 		ImGui::PopStyleColor();
 
 		ImGui::SameLine(0, uiScaled(20));
@@ -344,26 +414,19 @@ void gui_settings_crt_shaders()
 	// Current active preset
 	std::string current_tech = GetCurrentCRTPreset();
 	int current_idx = 0;
-	bool found = false;
 	for (size_t i = 0; i < kPresetCount; ++i)
 	{
 		if (current_tech == kCRTPresets[i].technique)
 		{
 			current_idx = static_cast<int>(i);
-			found = true;
 			break;
 		}
-	}
-	if (!found)
-	{
-		// Default to first preset (CRT-Geom) if matching failed
-		current_idx = 0;
 	}
 
 	// Preset Selection Combo Box
 	const float comboWidth = std::min(uiScaled(460.0f), ImGui::GetContentRegionAvail().x - uiScaled(120.0f));
 	ImGui::SetNextItemWidth(comboWidth);
-	if (ImGui::BeginCombo(T("Active CRT Preset"), kCRTPresets[current_idx].label))
+	if (ImGui::BeginCombo(T("ReShade Preset"), kCRTPresets[current_idx].label))
 	{
 		for (size_t i = 0; i < kPresetCount; ++i)
 		{
@@ -378,48 +441,13 @@ void gui_settings_crt_shaders()
 		ImGui::EndCombo();
 	}
 
-	// Description of currently selected preset
 	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.70f, 0.85f, 1.0f, 1.0f));
 	ImGui::TextWrapped("%s %s", ICON_FA_TV, kCRTPresets[current_idx].description);
 	ImGui::PopStyleColor();
 
 	ImGui::Spacing();
-
-	// Quick 1-Click Preset Buttons
-	ImGui::Text("%s", T("Quick CRT Profiles:"));
-	ImGui::SameLine(0, uiScaled(10));
-
-	auto PresetButton = [&](const char* name, const char* tech) {
-		bool active = (current_tech == tech);
-		if (active)
-		{
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.45f, 0.85f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.24f, 0.55f, 0.95f, 1.0f));
-		}
-		if (ImGui::Button(name, ScaledVec2(100, 26)))
-		{
-			SetCRTPreset(tech);
-		}
-		if (active)
-		{
-			ImGui::PopStyleColor(2);
-		}
-		ImGui::SameLine(0, uiScaled(6));
-	};
-
-	PresetButton("CRT-Geom", "GeomCRT@CRTGeom.fx");
-	PresetButton("CRT-Lottes", "LottesCRT@CRTLottes.fx");
-	PresetButton("CRT-Easymode", "EasymodeCRT@CRTEasymode.fx");
-	PresetButton("CRT-Hyllian", "CRTHyllian@CRTHyllian.fx");
-	PresetButton("PowerVR2", "PowerVR2@PowerVR2.fx");
-	PresetButton("Off (Raw)", "");
-
-	ImGui::NewLine();
-	ImGui::Spacing();
-
-	// In-game live overlay tip
 	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.80f, 0.80f, 0.85f, 1.0f));
 	ImGui::TextWrapped("%s %s", ICON_FA_KEYBOARD,
-		T("Live Shader Fine-Tuning: Press the 'Home' key on your keyboard at any time during gameplay to toggle the ReShade on-screen overlay. You can interactively tweak scanline density, tube curvature, brightness, and mask bloom in real-time!"));
+		T("ReShade Overlay: Press the 'Home' key on your keyboard during gameplay to open the ReShade menu and fine-tune external shaders."));
 	ImGui::PopStyleColor();
 }

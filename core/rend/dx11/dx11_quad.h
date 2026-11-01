@@ -73,10 +73,10 @@ public:
 			desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 		    device->CreateBuffer(&desc, nullptr, &vertexBuffer.get());
 		}
-		// Constant buffer
+		// Constant buffer (color + crtParams)
 		{
 			D3D11_BUFFER_DESC desc{};
-			desc.ByteWidth = sizeof(float) * 4;
+			desc.ByteWidth = sizeof(float) * 8;
 			desc.Usage = D3D11_USAGE_DYNAMIC;
 			desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 			desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -85,7 +85,7 @@ public:
 	}
 
 	void draw(ComPtr<ID3D11ShaderResourceView>& texView, ComPtr<ID3D11SamplerState> sampler, const float *color = nullptr,
-			float x = -1.f, float y = -1.f, float w = 2.f, float h = 2.f, bool rotate = false)
+			float x = -1.f, float y = -1.f, float w = 2.f, float h = 2.f, bool rotate = false, const float *crtParams = nullptr)
 	{
 		// Vertex buffer
 		Vertex vertices[4] {
@@ -114,12 +114,19 @@ public:
 		deviceContext->DSSetShader(nullptr, nullptr, 0);
 		deviceContext->CSSetShader(nullptr, nullptr, 0);
 
+		float cbData[8];
 		static const float white[] = { 1.f, 1.f, 1.f, 1.f };
 		if (color == nullptr)
 			color = white;
+		memcpy(cbData, color, sizeof(float) * 4);
+		if (crtParams != nullptr)
+			memcpy(cbData + 4, crtParams, sizeof(float) * 4);
+		else
+			memset(cbData + 4, 0, sizeof(float) * 4);
+
 		D3D11_MAPPED_SUBRESOURCE mappedSubres;
 		deviceContext->Map(constantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubres);
-		memcpy(mappedSubres.pData, color, sizeof(float) * 4);
+		memcpy(mappedSubres.pData, cbData, sizeof(cbData));
 		deviceContext->Unmap(constantBuffer, 0);
 		deviceContext->PSSetConstantBuffers(0, 1, &constantBuffer.get());
 

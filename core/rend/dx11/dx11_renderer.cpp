@@ -582,7 +582,15 @@ void DX11Renderer::displayFramebuffer()
 	x += shiftX;
 	y += shiftY;
 	deviceContext->OMSetBlendState(blendStates.getState(false), nullptr, 0xffffffff);
-	quad->draw(fbTextureView, samplers->getSampler(config::LinearInterpolation), nullptr, x, y, w, h, config::Rotate90);
+	float crtParams[4] = { 0.f, 0.f, 0.f, 0.f };
+	if (config::CrtFilter > 0)
+	{
+		crtParams[0] = static_cast<float>(config::CrtFilter);
+		crtParams[1] = 480.0f; // Authentic Dreamcast 480p scanline grid
+		crtParams[2] = (config::CrtFilter == 4) ? 0.18f : 0.28f; // Scanline intensity
+		crtParams[3] = (config::CrtFilter == 3) ? 1.0f : 0.0f;  // Curvature
+	}
+	quad->draw(fbTextureView, samplers->getSampler(config::LinearInterpolation), nullptr, x, y, w, h, config::Rotate90, crtParams);
 #endif
 }
 
