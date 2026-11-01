@@ -1,0 +1,46 @@
+name: Windows Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Windows x64 (MSVC Release)
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Flycast Studio
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: Package Windows Binary
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item "build/Release/flycast.exe" -Destination "dist/flycast.exe"
+          Compress-Archive -Path "dist/*" -DestinationPath "Flycast-Studio-Windows-x64.zip"
+
+      - name: Upload Windows x64 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flycast-Studio-Windows-x64
+          path: Flycast-Studio-Windows-x64.zip
+          retention-days: 30
