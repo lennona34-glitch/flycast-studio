@@ -18,6 +18,7 @@
  */
 #include "settings.h"
 #include "gui.h"
+#include "gui_crt_shaders.h"
 #include "wsi/context.h"
 #include "sdl/sdl.h"
 
@@ -429,6 +430,8 @@ void gui_settings_video()
 		}
 	}
 #endif
+
+    gui_settings_crt_shaders();
 
     switch (renderApi)
     {

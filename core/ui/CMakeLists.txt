@@ -16,6 +16,8 @@ if(NOT LIBRETRO)
             gui_gamebanana.h
             gui_quest_vr.cpp
             gui_quest_vr.h
+            gui_crt_shaders.cpp
+            gui_crt_shaders.h
             gui_util.cpp
             gui_util.h
             mainui.cpp
