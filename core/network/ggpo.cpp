@@ -41,6 +41,19 @@ static void getLocalInput(MapleInputState inputState[4])
 	{
 		MapleInputState& state = inputState[player];
 		state.kcode = kcode[player];
+		if (config::AnalogToDpad)
+		{
+			constexpr s16 kAnalogToDpadThreshold = 12000;
+			if (joyx[player] < -kAnalogToDpadThreshold)
+				state.kcode &= ~DC_DPAD_LEFT;
+			else if (joyx[player] > kAnalogToDpadThreshold)
+				state.kcode &= ~DC_DPAD_RIGHT;
+
+			if (joyy[player] < -kAnalogToDpadThreshold)
+				state.kcode &= ~DC_DPAD_UP;
+			else if (joyy[player] > kAnalogToDpadThreshold)
+				state.kcode &= ~DC_DPAD_DOWN;
+		}
 		state.halfAxes[PJTI_L] = lt[player];
 		state.halfAxes[PJTI_R] = rt[player];
 		state.halfAxes[PJTI_L2] = lt2[player];

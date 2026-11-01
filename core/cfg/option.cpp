@@ -197,6 +197,7 @@ Option<bool> OmxAudioHdmi("audio_hdmi", true, "omx");
 Option<int> MouseSensitivity("MouseSensitivity", 100, "input");
 Option<int> VirtualGamepadVibration("VirtualGamepadVibration", 20, "input");
 Option<int> VirtualGamepadTransparency("VirtualGamepadTransparency", 37, "input");
+Option<bool> AnalogToDpad("AnalogToDpad", true, "input");
 
 std::array<Option<MapleDeviceType>, 4> MapleMainDevices {
 	Option<MapleDeviceType>("device1", MDT_SegaController, "input"),

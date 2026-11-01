@@ -1103,6 +1103,7 @@ void gui_settings_controls(std::array<bool, 4>& mapleDevicesChanges, std::array<
 #if defined(_WIN32) && !defined(TARGET_UWP)
 	OptionCheckbox(T("Use Raw Input"), config::UseRawInput, T("Supports multiple pointing devices (mice, light guns) and keyboards"));
 #endif
+	OptionCheckbox(T("Analog Stick to D-Pad (Auto-Mirror)"), config::AnalogToDpad, T("Allows moving with the Left Analog Stick in arcade games (NAOMI / Atomiswave) and D-pad-driven Dreamcast games"));
 
 	ImGui::Spacing();
 	header(T("Dreamcast Devices"));

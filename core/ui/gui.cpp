@@ -360,10 +360,15 @@ static void gui_newFrame()
 	io.AddKeyEvent(ImGuiKey_GamepadFaceRight, ((kcode[0] & DC_BTN_B) == 0));
 	io.AddKeyEvent(ImGuiKey_GamepadFaceUp, ((kcode[0] & DC_BTN_Y) == 0));
 	io.AddKeyEvent(ImGuiKey_GamepadFaceDown, ((kcode[0] & DC_BTN_A) == 0));
-	io.AddKeyEvent(ImGuiKey_GamepadDpadLeft, ((kcode[0] & DC_DPAD_LEFT) == 0));
-	io.AddKeyEvent(ImGuiKey_GamepadDpadRight, ((kcode[0] & DC_DPAD_RIGHT) == 0));
-	io.AddKeyEvent(ImGuiKey_GamepadDpadUp, ((kcode[0] & DC_DPAD_UP) == 0));
-	io.AddKeyEvent(ImGuiKey_GamepadDpadDown, ((kcode[0] & DC_DPAD_DOWN) == 0));
+	const bool dpad_left = ((kcode[0] & DC_DPAD_LEFT) == 0) || (config::AnalogToDpad && joyx[0] < -12000);
+	const bool dpad_right = ((kcode[0] & DC_DPAD_RIGHT) == 0) || (config::AnalogToDpad && joyx[0] > 12000);
+	const bool dpad_up = ((kcode[0] & DC_DPAD_UP) == 0) || (config::AnalogToDpad && joyy[0] < -12000);
+	const bool dpad_down = ((kcode[0] & DC_DPAD_DOWN) == 0) || (config::AnalogToDpad && joyy[0] > 12000);
+
+	io.AddKeyEvent(ImGuiKey_GamepadDpadLeft, dpad_left);
+	io.AddKeyEvent(ImGuiKey_GamepadDpadRight, dpad_right);
+	io.AddKeyEvent(ImGuiKey_GamepadDpadUp, dpad_up);
+	io.AddKeyEvent(ImGuiKey_GamepadDpadDown, dpad_down);
 
 	float analog;
 	analog = joyx[0] < 0 ? -(float)joyx[0] / 32768.f : 0.f;

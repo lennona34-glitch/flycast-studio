@@ -79,35 +79,35 @@ struct DreamcastGameEntry
 
 static const DreamcastGameEntry kDreamcastGames[] = {
 	{ "All Sega Dreamcast / NAOMI / Atomiswave Games", "MK-51000", 0 },
-	{ "Sonic Adventure (Dreamcast / DX)", "MK-51000", 5944 },
-	{ "Sonic Adventure 2 (Dreamcast / Battle)", "MK-51117", 5945 },
-	{ "Jet Set Radio / Jet Grind Radio", "MK-51058", 6113 },
-	{ "Marvel vs. Capcom 2: New Age of Heroes", "T1212N", 7561 },
-	{ "Capcom vs. SNK 2: Mark of the Millennium 2001", "HDR-0165", 8154 },
-	{ "SoulCalibur", "T1401N", 6543 },
-	{ "Crazy Taxi", "MK-51035", 6620 },
-	{ "Crazy Taxi 2", "MK-51136", 8322 },
-	{ "Shenmue", "MK-51059", 7211 },
-	{ "Shenmue II", "MK-51184", 7212 },
-	{ "Resident Evil - Code: Veronica", "T1204N", 7890 },
-	{ "Skies of Arcadia", "MK-51052", 7915 },
-	{ "Phantasy Star Online Ver. 2", "MK-51193", 6814 },
-	{ "Power Stone 2", "T1211N", 8410 },
-	{ "Dead or Alive 2", "T3601N", 7408 },
-	{ "Street Fighter III: 3rd Strike", "T1213N", 6190 },
-	{ "Guilty Gear X (Dreamcast / NAOMI)", "T2401M", 7112 },
-	{ "Tony Hawk's Pro Skater 2", "T13006N", 6489 },
-	{ "Quake III Arena", "T40205N", 54 },
+	{ "Sonic Adventure (Dreamcast / DX)", "MK-51000", 5892 },
+	{ "Sonic Adventure 2 (Dreamcast / Battle)", "MK-51117", 5855 },
+	{ "Jet Set Radio / Jet Grind Radio", "MK-51058", 6340 },
+	{ "Marvel vs. Capcom 2: New Age of Heroes", "T1212N", 0 },
+	{ "Capcom vs. SNK 2: Mark of the Millennium 2001", "HDR-0165", 0 },
+	{ "SoulCalibur", "T1401N", 0 },
+	{ "Crazy Taxi", "MK-51035", 6341 },
+	{ "Crazy Taxi 2", "MK-51136", 6341 },
+	{ "Shenmue", "MK-51059", 7623 },
+	{ "Shenmue II", "MK-51184", 7623 },
+	{ "Resident Evil - Code: Veronica", "T1204N", 7001 },
+	{ "Skies of Arcadia", "MK-51052", 18776 },
+	{ "Phantasy Star Online Ver. 2", "MK-51193", 8597 },
+	{ "Power Stone 2", "T1211N", 0 },
+	{ "Dead or Alive 2", "T3601N", 19198 },
+	{ "Street Fighter III: 3rd Strike", "T1213N", 0 },
+	{ "Guilty Gear X (Dreamcast / NAOMI)", "T2401M", 0 },
+	{ "Tony Hawk's Pro Skater 2", "T13006N", 0 },
+	{ "Quake III Arena", "T40205N", 289 },
 	{ "Unreal Tournament", "T40209N", 242 },
 	{ "Rayman 2: The Great Escape", "T17704N", 6305 },
-	{ "Grandia II", "T17714N", 8102 },
-	{ "Space Channel 5 Part 2", "HDR-0190", 8512 },
-	{ "Ikaruga", "HDR-0203", 8601 },
-	{ "Rez", "HDR-0174", 8615 },
-	{ "Samba de Amigo", "MK-51049", 8640 },
-	{ "The House of the Dead 2", "MK-51002", 8690 },
-	{ "Metropolis Street Racer (MSR)", "MK-51012", 8720 },
-	{ "Legacy of Kain: Soul Reaver", "T36802N", 8755 }
+	{ "Grandia II", "T17714N", 0 },
+	{ "Space Channel 5 Part 2", "HDR-0190", 0 },
+	{ "Ikaruga", "HDR-0203", 0 },
+	{ "Rez", "HDR-0174", 0 },
+	{ "Samba de Amigo", "MK-51049", 0 },
+	{ "The House of the Dead 2", "MK-51002", 0 },
+	{ "Metropolis Street Racer (MSR)", "MK-51012", 0 },
+	{ "Legacy of Kain: Soul Reaver", "T36802N", 0 }
 };
 
 struct GameBananaFileEntry
@@ -1145,7 +1145,7 @@ static void TriggerGameBananaSearch()
 	g_gb.progress_pct.store(15);
 	SetGbStatus("Querying GameBanana API v11 for Dreamcast mods, 3D models, maps, skins & cheats...");
 
-	std::thread([gb_game_id, game_label, query, sort_idx, cat_idx]() {
+	std::thread([game_idx, gb_game_id, game_label, query, sort_idx, cat_idx]() {
 		static const char* kCatKeywords[] = {
 			"",
 			"model",
@@ -1168,19 +1168,39 @@ static void TriggerGameBananaSearch()
 		std::string url;
 		if (gb_game_id > 0 && effective_q.empty())
 		{
-			std::string sort_param = "default";
-			if (sort_idx == 1)
-				sort_param = "new";
+			std::string sort_param = "";
+			if (sort_idx == 0)
+				sort_param = "Generic_MostLiked";
+			else if (sort_idx == 1)
+				sort_param = "Generic_Newest";
 			else if (sort_idx == 2)
-				sort_param = "updated";
+				sort_param = "Generic_MostDownloaded";
+
 			url = "https://gamebanana.com/apiv11/Mod/Index?_nPerpage=35&_nPage=1&_aFilters%5BGeneric_Game%5D=" +
-				  std::to_string(gb_game_id) + "&_sSort=" + sort_param;
+				  std::to_string(gb_game_id);
+			if (!sort_param.empty())
+				url += "&_sSort=" + sort_param;
 		}
 		else
 		{
 			std::string search_str = effective_q;
 			if (search_str.empty())
-				search_str = (gb_game_id > 0) ? game_label : "Sonic Adventure Dreamcast";
+			{
+				if (game_idx > 0)
+				{
+					search_str = game_label;
+					const size_t p = search_str.find(" (");
+					if (p != std::string::npos)
+						search_str = search_str.substr(0, p);
+					const size_t slash = search_str.find(" / ");
+					if (slash != std::string::npos)
+						search_str = search_str.substr(0, slash);
+				}
+				else
+				{
+					search_str = "Dreamcast";
+				}
+			}
 			url = "https://gamebanana.com/apiv11/Util/Search/Results?_sSearchString=" +
 				  UrlEncode(search_str) + "&_nPage=1&_nPerpage=35";
 			if (gb_game_id > 0)
@@ -1249,13 +1269,21 @@ static void TriggerGameBananaSearch()
 			}
 		}
 
-		// Fallback search if Mod/Index returned 0 records
-		if (results.empty() && err.empty() && gb_game_id > 0)
+		// Fallback search if primary query had an error or returned 0 records
+		if (results.empty())
 		{
 			std::string fallback_q = game_label;
-			const size_t paren = fallback_q.find(" (");
-			if (paren != std::string::npos)
-				fallback_q = fallback_q.substr(0, paren);
+			if (fallback_q.empty() || game_idx == 0)
+				fallback_q = "Dreamcast";
+			else
+			{
+				const size_t paren = fallback_q.find(" (");
+				if (paren != std::string::npos)
+					fallback_q = fallback_q.substr(0, paren);
+				const size_t slash = fallback_q.find(" / ");
+				if (slash != std::string::npos)
+					fallback_q = fallback_q.substr(0, slash);
+			}
 			if (!effective_q.empty())
 				fallback_q += " " + effective_q;
 
@@ -1264,7 +1292,8 @@ static void TriggerGameBananaSearch()
 				UrlEncode(fallback_q) + "&_nPage=1&_nPerpage=35";
 
 			raw.clear();
-			if (HttpGetBinary(fallback_url, raw, nullptr, err) && !raw.empty())
+			std::string fallback_err;
+			if (HttpGetBinary(fallback_url, raw, nullptr, fallback_err) && !raw.empty())
 			{
 				try
 				{
@@ -1288,6 +1317,7 @@ static void TriggerGameBananaSearch()
 								item.likes = obj["_nLikeCount"].get<int>();
 							if (obj.contains("_nViewCount") && obj["_nViewCount"].is_number())
 								item.views = obj["_nViewCount"].get<int>();
+
 							if (obj.contains("_aSubmitter") && obj["_aSubmitter"].is_object())
 							{
 								const auto& sub = obj["_aSubmitter"];
@@ -1306,6 +1336,8 @@ static void TriggerGameBananaSearch()
 								results.push_back(std::move(item));
 						}
 					}
+					if (!results.empty())
+						err.clear();
 				}
 				catch (...)
 				{
