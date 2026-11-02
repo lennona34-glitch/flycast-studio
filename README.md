@@ -1,99 +1,148 @@
-# Flycast
+# Flycast-XR Studio
 
-[![Android CI](https://github.com/flyinghead/flycast/actions/workflows/android.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/android.yml)
-[![C/C++ CI](https://github.com/flyinghead/flycast/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/c-cpp.yml)
-[![Nintendo Switch CI](https://github.com/flyinghead/flycast/actions/workflows/switch.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/switch.yml)
-[![Windows UWP CI](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml)
-[![BSD CI](https://github.com/flyinghead/flycast/actions/workflows/bsd.yml/badge.svg)](https://github.com/flyinghead/flycast/actions/workflows/bsd.yml)
+[![Windows Build](https://github.com/lennona34-glitch/flycast-studio/actions/workflows/windows.yml/badge.svg)](https://github.com/lennona34-glitch/flycast-studio/actions/workflows/windows.yml)
+[![Platform](https://img.shields.io/badge/platform-Windows%20x64-blue.svg)](https://github.com/lennona34-glitch/flycast-studio)
+[![DirectX 11](https://img.shields.io/badge/Renderer-DirectX%2011%20%7C%20Vulkan-green.svg)](https://github.com/lennona34-glitch/flycast-studio)
+[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-yellow.svg)](LICENSE)
 
-<img src="shell/linux/flycast.png" alt="flycast logo" width="150"/>
+<p align="center">
+  <img src="shell/linux/flycast.png" alt="Flycast Studio Logo" width="160"/>
+  <br>
+  <strong>Next-Generation Sega Dreamcast, NAOMI, NAOMI 2 & Atomiswave Arcade Emulator</strong>
+</p>
 
-**Flycast** is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator derived from [**reicast**](https://github.com/skmp/reicast-emulator).
+---
 
-Information about configuration and supported features can be found on [**TheArcadeStriker's flycast wiki**](https://github.com/TheArcadeStriker/flycast-wiki/wiki).
+## 🌟 Overview
 
-Join us on our [**Discord server**](https://discord.gg/X8YWP8w) for a chat.
+**Flycast-XR Studio** is an advanced fork of Flycast designed for modern gaming environments. It pairs bit-accurate Sega Dreamcast, NAOMI, NAOMI 2, and Atomiswave arcade emulation with modern display innovations, wireless VR streaming, live community modding, and authentic CRT simulation.
 
-## Downloads ![android](https://flyinghead.github.io/flycast-builds/android.jpg) ![windows](https://flyinghead.github.io/flycast-builds/windows.png) ![linux](https://flyinghead.github.io/flycast-builds/ubuntu.png) ![apple](https://flyinghead.github.io/flycast-builds/apple.png) ![switch](https://flyinghead.github.io/flycast-builds/switch.png) ![xbox](https://flyinghead.github.io/flycast-builds/xbox.png)
+---
 
-Get builds for your system from the [**builds page**](https://flyinghead.github.io/flycast-builds/) or [**GitHub Releases**](https://github.com/flyinghead/flycast/releases).
+## 🚀 Key Features
 
-- **Latest master builds:** regular builds from the `master` branch with recent fixes and updates.
-- **Nightly dev builds:** experimental builds with the latest features and changes.
-- **Stable tagged releases:** versioned release builds published on GitHub Releases.
+### 🥽 Meta Quest VR & Mixed Reality Broadcast Studio
+- **Low-Latency Wireless VR Streaming**: Stream any Dreamcast or arcade title directly to your Meta Quest browser at silky-smooth 72 FPS via high-efficiency WebSockets/WebXR.
+- **Stereoscopic 3D & Virtual Arcade**: Experience games floating in mixed reality or inside a life-sized virtual arcade cabinet.
+- **Split-Screen Isolation**: Render VR stereo pairs cleanly without cluttering desktop controls or UI windows.
 
-Automated test results are available from the builds page as well.
+### 🍌 GameBanana Dreamcast Modding Hub & Cheats Studio
+- **Integrated Mod Browser**: Search, preview, and explore thousands of skins, custom textures, music packs, and total conversions directly inside Flycast.
+- **1-Click Download & Disc Patching**: Download mods directly into game directories with zero manual file moving.
+- **GameShark / Action Replay Memory Injector**: Live cheat injector with memory search, health/lives locks, and widescreen hack patches.
 
-## Install
+### 📺 Native Hardware-Accelerated CRT Shader (DirectX 11)
+- **Zero UI Blur**: Dedicated dual-pass quad pipeline renders the 3D/2D game viewport with authentic phosphor glow, curvature, and scanlines while keeping all Flycast UI menus, text, and debug bars tack-sharp.
+- **4 Built-In Hardware Presets**:
+  1. **Arcade CRT (15 kHz)**: Authentic RGB arcade monitor with subtle scanlines and phosphor bloom.
+  2. **Dreamcast VGA (480p)**: Razor-sharp progressive scanlines mimicking the official Sega Dreamcast VGA Box on high-grade CRT monitors.
+  3. **Curved Tube (Trinitron)**: Barrel curvature, aperture grille phosphors, and subtle glass corner vignetting.
+  4. **Clean Crisp Scanlines**: Modern scanline overlay without geometry distortion for pure pixel art.
 
-### Android ![android](https://flyinghead.github.io/flycast-builds/android.jpg)
+### 🎨 Integrated ReShade Post-Processing Suite
+- **1-Click ReShade Setup**: Built-in downloader installs ReShade and over 70 vintage CRT, NTSC, and retro color-grading shaders into your Flycast folder.
+- **In-Game Overlay**: Accessible via the `Home` key or through the in-game `Tab` menu.
 
-Install Flycast from [**Google Play**](https://play.google.com/store/apps/details?id=com.flycast.emulator).
+---
 
-### Flatpak (Linux ![ubuntu logo](https://flyinghead.github.io/flycast-builds/ubuntu.png))
+## 🎮 Controls & Shortcuts
 
-1. [Set up Flatpak](https://www.flatpak.org/setup/).
+| Action | Shortcut / Input |
+|---|---|
+| **Toggle True Fullscreen** | `Alt + Enter` |
+| **Exit Fullscreen / Quick Menu** | `Esc` |
+| **Open In-Game Studio Menu** | `Tab` |
+| **Toggle ReShade Overlay** | `Home` |
+| **Take Screenshot** | `F12` |
+| **Quick Save State** | `F5` |
+| **Quick Load State** | `F7` |
 
-2. Install Flycast from [Flathub](https://flathub.org/apps/details/org.flycast.Flycast):
+---
 
-`flatpak install -y org.flycast.Flycast`
+## 🛠️ Building from Source (Windows x64)
 
-3. Run Flycast:
+### Prerequisites
 
-`flatpak run org.flycast.Flycast`
+Before compiling, make sure you have the following installed on Windows 10/11:
 
-### Homebrew (macOS ![apple logo](https://flyinghead.github.io/flycast-builds/apple.png))
+1. **Visual Studio 2022** (Community, Professional, or Enterprise)
+   - Ensure the **"Desktop development with C++"** workload is selected in the Visual Studio Installer.
+   - Ensure **"C++ CMake tools for Windows"** and **"MSVC v143 - VS 2022 C++ x64/x86 build tools"** are checked.
+2. **Git for Windows** (available at [git-scm.com](https://git-scm.com/))
+3. **CMake 3.15+** (available at [cmake.org](https://cmake.org/download/) or via Visual Studio)
 
-1. [Set up Homebrew](https://brew.sh).
+---
 
-2. Install Flycast via Homebrew:
+### Option A: 1-Click Automated Build (Recommended)
 
-`brew install --cask flycast`
+1. Clone the repository with all submodules:
+   ```cmd
+   git clone --recursive https://github.com/lennona34-glitch/flycast-studio.git
+   cd flycast-studio
+   ```
 
-### iOS
+2. Run the automated build script:
+   ```cmd
+   build_windows.bat
+   ```
 
-Due to persistent harassment from an iOS user, support for this platform has been dropped.
+The script will automatically:
+- Verify and update all recursive submodules (`SDL`, `glslang`, `libchdr`, `xxHash`, etc.).
+- Generate the Visual Studio 2022 x64 project with modern DirectX 11 and Vulkan enabled.
+- Compile in `Release` configuration using all available CPU threads.
+- Output the binary to `build\Release\flycast.exe` and copy it to `dist\flycast.exe`.
 
-### Xbox One/Series ![xbox logo](https://flyinghead.github.io/flycast-builds/xbox.png)
+---
 
-Grab the latest build from [**the builds page**](https://flyinghead.github.io/flycast-builds/), or the [**GitHub Actions**](https://github.com/flyinghead/flycast/actions/workflows/uwp.yml). Then install it using the **Xbox Device Portal**.
+### Option B: Manual Command Line Build
 
-## Build from source
+1. **Clone with Submodules**:
+   ```cmd
+   git clone --recursive https://github.com/lennona34-glitch/flycast-studio.git
+   cd flycast-studio
+   ```
 
-### macOS
+   *(If already cloned without `--recursive`, run this first:)*
+   ```cmd
+   git submodule update --init --recursive
+   ```
 
-Right-click the bootstrap script and choose **Open**:
+2. **Configure CMake**:
+   ```cmd
+   cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DUSE_DX9=OFF
+   ```
+   > **Note**: `-DUSE_DX9=OFF` ensures compatibility with modern Windows 10/11 systems without needing the legacy 2010 DirectX SDK. Flycast uses DirectX 11, Vulkan, and OpenGL for maximum performance and shader support.
 
-`shell/apple/generate_xcode_project.command`
+3. **Build Release Binary**:
+   ```cmd
+   cmake --build build --config Release --parallel
+   ```
 
-### Windows
+4. **Run Flycast**:
+   ```cmd
+   build\Release\flycast.exe
+   ```
 
-Double-click the bootstrap script:
+---
 
-`shell\windows\generate_vs_project.bat`
+## 📦 Continuous Integration & Releases
 
-### Linux
+Automated Windows x64 binaries are built on every push via **GitHub Actions**.
+Download the latest pre-compiled artifacts directly from the **[Actions tab](https://github.com/lennona34-glitch/flycast-studio/actions)**.
 
-#### Dependencies
+---
 
-- **C/C++ compiler toolchain** (e.g. `gcc`/`g++`)
-- **CMake**
-- **make**
-- **libcurl** (development headers)
-- **libudev** (development headers)
-- **SDL2** (development headers)
-- **Graphics API**: Vulkan, OpenGL
+## 🕹️ Supported ROM & Disc Formats
 
-#### Build
+- **Sega Dreamcast**: `.gdi`, `.cdi`, `.chd`, `.cue`, `.iso`
+- **Sega NAOMI / NAOMI 2**: `.zip`, `.7z`, `.bin`, `.dat`
+- **Sammy Atomiswave**: `.zip`, `.7z`
 
-```
-$ git clone --recursive https://github.com/flyinghead/flycast.git
-$ cd flycast
-$ mkdir build && cd build
-$ cmake ..
-$ make
-```
+Place your BIOS and system files in your configured `data` directory (`dc_boot.bin`, `dc_flash.bin`, `naomi.zip`, `awbios.zip`).
 
-## Packaging status
+---
 
-[![Packaging status](https://repology.org/badge/vertical-allrepos/flycast.svg)](https://repology.org/project/flycast/versions)
+## 📜 Credits & License
+
+- Based on [Flycast](https://github.com/flyinghead/flycast) by flyinghead and the [reicast](https://github.com/skmp/reicast-emulator) team.
+- Licensed under the **GNU General Public License v2** (GPL-2.0). See [LICENSE](LICENSE) for details.

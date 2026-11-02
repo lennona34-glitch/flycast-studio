@@ -25,7 +25,7 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DUSE_DX9=OFF
 
       - name: Build Flycast Studio
         run: |
