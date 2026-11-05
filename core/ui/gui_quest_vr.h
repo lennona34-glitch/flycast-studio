@@ -59,6 +59,9 @@ public:
 	double GetActualCaptureFps() const { return m_actual_fps.load(); }
 	std::string GetLastErrorMsg() const;
 
+	void PushAudioSamples(const void* data, size_t sample_pairs);
+	void UpdateControllerInput(uint32_t buttons, float joyx, float joyy, float lt, float rt);
+
 private:
 	QuestBroadcastService();
 	~QuestBroadcastService();
@@ -82,6 +85,11 @@ private:
 	mutable std::mutex m_frame_mutex;
 	std::vector<uint8_t> m_latest_jpeg;
 
+	mutable std::mutex m_audio_mutex;
+	std::vector<int16_t> m_audio_buffer;
+
+	std::shared_ptr<class GamepadDevice> m_vr_gamepad;
+
 	mutable std::mutex m_error_mutex;
 	std::string m_last_error;
 
@@ -89,6 +97,8 @@ private:
 	std::thread m_server_thread;
 	uintptr_t m_listen_socket = ~static_cast<uintptr_t>(0);
 };
+
+void QuestBroadcastPushAudio(const void* samples, size_t count);
 
 // Fullscreen Quest VR & Mixed Reality Studio screen (GuiState::QuestVR)
 void gui_quest_vr();

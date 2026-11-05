@@ -48,6 +48,8 @@ AudioBackend *AudioBackend::getBackend(const std::string& slug)
 	return nullptr;
 }
 
+extern void QuestBroadcastPushAudio(const void* samples, size_t count);
+
 void WriteSample(s16 r, s16 l)
 {
 	Buffer[writePtr].r = r * config::AudioVolume.dbPower();
@@ -57,6 +59,7 @@ void WriteSample(s16 r, s16 l)
 	{
 		if (currentBackend != nullptr)
 			currentBackend->push(Buffer, SAMPLE_COUNT, config::LimitFPS);
+		QuestBroadcastPushAudio(Buffer, SAMPLE_COUNT);
 		writePtr = 0;
 	}
 }

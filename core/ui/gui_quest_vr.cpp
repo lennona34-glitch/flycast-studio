@@ -27,6 +27,9 @@
 #include "emulator.h"
 #include "imgui.h"
 #include "imgui_stdlib.h"
+#include "input/gamepad_device.h"
+#include "input/gamepad.h"
+#include "input/mapping.h"
 
 #include <chrono>
 #include <cstdio>
@@ -68,53 +71,67 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
 <style>
   :root {
     --bg: #080b12;
-    --panel: rgba(16, 22, 36, 0.92);
+    --panel: rgba(16, 22, 36, 0.95);
     --accent: #ff6b00;
     --accent2: #00a8ff;
     --text: #f1f5f9;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-  body {
-    background: radial-gradient(circle at top, #141e33, #060911 70%);
+  html, body {
+    width: 100vw; height: 100vh;
+    overflow: hidden !important;
+    background: radial-gradient(circle at top, #141e33, #060911 75%);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    min-height: 100vh;
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+  body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    overflow-x: hidden;
   }
   header {
     width: 100%;
-    padding: 12px 20px;
-    background: rgba(8, 12, 22, 0.90);
+    padding: 10px 18px;
+    background: rgba(8, 12, 22, 0.92);
     border-bottom: 1px solid rgba(59, 130, 246, 0.40);
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     backdrop-filter: blur(10px);
+    z-index: 10;
   }
   .brand {
     display: flex;
     align-items: center;
     gap: 10px;
     font-weight: 800;
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     letter-spacing: 0.4px;
     color: #60a5fa;
   }
   .badge {
     background: linear-gradient(135deg, #2563eb, #38bdf8);
     color: white;
-    font-size: 0.72rem;
-    padding: 3px 9px;
+    font-size: 0.70rem;
+    padding: 3px 8px;
     border-radius: 999px;
     font-weight: 700;
   }
+  .ctrl-badge {
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(16, 185, 129, 0.5);
+    color: #34d399;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
   .stats {
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     color: #94a3b8;
     font-variant-numeric: tabular-nums;
   }
@@ -123,22 +140,23 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
     flex-wrap: wrap;
     gap: 8px;
     justify-content: center;
-    padding: 12px 16px;
+    padding: 8px 14px;
     background: var(--panel);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 14px;
-    margin: 12px;
-    max-width: 1120px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    margin: 8px 12px 6px;
+    max-width: 1240px;
     width: calc(100% - 24px);
+    z-index: 10;
   }
   button, select {
     background: #1b263b;
     color: var(--text);
     border: 1px solid rgba(59, 130, 246, 0.45);
-    padding: 9px 14px;
-    border-radius: 9px;
+    padding: 8px 14px;
+    border-radius: 8px;
     font-weight: 600;
-    font-size: 0.88rem;
+    font-size: 0.85rem;
     cursor: pointer;
     transition: all 0.15s ease;
   }
@@ -149,9 +167,15 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
     border: none;
     font-weight: 700;
   }
-  button.primary:hover { filter: brightness(1.12); }
+  button.primary:hover { filter: brightness(1.15); }
   button.vr-btn {
-    background: linear-gradient(135deg, #0088ff, #6d28d9);
+    background: linear-gradient(135deg, #0088ff, #7c3aed);
+    color: #fff;
+    border: none;
+    font-weight: 700;
+  }
+  button.audio-btn {
+    background: #059669;
     color: #fff;
     border: none;
     font-weight: 700;
@@ -159,12 +183,12 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
   .sliders {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 14px;
     align-items: center;
     justify-content: center;
     width: 100%;
-    padding-top: 6px;
-    font-size: 0.82rem;
+    padding-top: 4px;
+    font-size: 0.80rem;
     color: #cbd5e1;
   }
   .sliders label {
@@ -174,49 +198,46 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
   }
   .stage {
     position: relative;
-    width: calc(100% - 24px);
-    max-width: 1280px;
-    aspect-ratio: 16 / 9;
+    flex: 1;
+    width: calc(100% - 16px);
+    max-width: 1400px;
     background: #000;
-    border-radius: 16px;
+    border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.75), 0 0 28px rgba(59, 130, 246, 0.22);
+    box-shadow: 0 15px 50px rgba(0,0,0,0.8), 0 0 24px rgba(59, 130, 246, 0.25);
     border: 1px solid rgba(255,255,255,0.12);
     display: flex;
     align-items: center;
     justify-content: center;
+    margin-bottom: 6px;
   }
   #glcanvas {
     width: 100%;
     height: 100%;
     display: block;
   }
-  .footer-hint {
-    margin: 12px 16px 20px;
-    font-size: 0.8rem;
-    color: #94a3b8;
-    text-align: center;
-  }
 </style>
 </head>
 <body>
+<audio id="streamAudio" preload="none"></audio>
 <header>
   <div class="brand">
-    <span>FLYCAST DREAMCAST VR &amp; MIXED REALITY STUDIO</span>
+    <span>FLYCAST DREAMCAST VR STUDIO</span>
     <span class="badge">QUEST 2 / 3 / 3S / PRO</span>
+    <span class="ctrl-badge" id="ctrlStatus">🎮 P1 Ready (Quest Touch &amp; Bluetooth)</span>
   </div>
   <div class="stats" id="stats">Connecting to Flycast stream...</div>
 </header>
 
 <div class="toolbar">
-  <button class="primary" id="btnEnterAR">Enter Mixed Reality (Passthrough)</button>
-  <button class="vr-btn" id="btnEnterVR">Enter VR Cinema (Virtual Void)</button>
+  <button class="primary" id="btnEnterAR">🥽 Enter Mixed Reality (Passthrough)</button>
+  <button class="vr-btn" id="btnEnterVR">🌌 Enter VR Cinema (Curved IMAX)</button>
+  <button class="audio-btn" id="btnToggleAudio">🔊 Sound: Tap to Start</button>
   <button id="btnMode2D">2D Cinema</button>
   <button id="btnModeSBS">SBS 3D Depth</button>
   <button id="btnModeTB">Top-Bottom 3D</button>
-  <button id="btnModeAnaglyph">Anaglyph 3D (Red/Cyan)</button>
-  <button id="btnRecenter">Recenter Screen</button>
-  <button id="btnFullscreen">2D Fullscreen</button>
+  <button id="btnModeAnaglyph">Anaglyph 3D</button>
+  <button id="btnRecenter">Recenter View</button>
 
   <div class="sliders">
     <label>Distance: <input type="range" id="rngDist" min="1.0" max="6.0" step="0.1" value="2.4"><span id="valDist">2.4m</span></label>
@@ -230,12 +251,18 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
   <canvas id="glcanvas"></canvas>
 </div>
 
-<div class="footer-hint">
-  Tip: On Meta Quest Browser, tap <b>Enter Mixed Reality</b> to float your Sega Dreamcast / NAOMI screen in your real room, or <b>Enter VR Cinema</b> for a curved theater! Use Quest thumbsticks in XR to adjust distance &amp; size.
-</div>
-
 <script>
 (function() {
+  // Lock out Android page scrolling from gamepad/joystick and prevent B/Escape from exiting
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'F11' && e.key !== 'F12') e.preventDefault();
+  }, { passive: false });
+  window.addEventListener('keyup', (e) => {
+    if (e.key !== 'F11' && e.key !== 'F12') e.preventDefault();
+  }, { passive: false });
+  window.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
   const canvas = document.getElementById('glcanvas');
   const statsEl = document.getElementById('stats');
   const gl = canvas.getContext('webgl', { xrCompatible: true, alpha: true, antialias: true });
@@ -243,6 +270,29 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
     statsEl.textContent = 'WebGL not supported in this browser.';
     return;
   }
+
+  let audioActive = false;
+  function toggleAudio() {
+    const a = document.getElementById('streamAudio');
+    if (!a) return;
+    if (audioActive) {
+      a.pause();
+      a.src = '';
+      audioActive = false;
+      const b = document.getElementById('btnToggleAudio');
+      if (b) { b.textContent = '🔇 Sound: Muted'; b.style.background = '#4b5563'; }
+    } else {
+      a.src = '/audio.wav?t=' + Date.now();
+      a.play().then(() => {
+        audioActive = true;
+        const b = document.getElementById('btnToggleAudio');
+        if (b) { b.textContent = '🔊 Sound: Live'; b.style.background = '#059669'; }
+      }).catch(e => console.log('Audio autoplay prevented:', e));
+    }
+  }
+  document.getElementById('btnToggleAudio').onclick = toggleAudio;
+  window.addEventListener('click', () => { if (!audioActive) toggleAudio(); }, { once: true });
+  window.addEventListener('touchstart', () => { if (!audioActive) toggleAudio(); }, { once: true });
 
   let renderMode = 0; // 0=2D, 1=SBS, 2=TopBottom, 3=Anaglyph
   let screenDist = 2.4;
@@ -270,10 +320,6 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
   document.getElementById('btnModeTB').onclick = () => renderMode = 2;
   document.getElementById('btnModeAnaglyph').onclick = () => renderMode = 3;
   document.getElementById('btnRecenter').onclick = () => { yawOffset = lastHeadYaw; };
-  document.getElementById('btnFullscreen').onclick = () => {
-    const st = document.getElementById('stageContainer');
-    if (st.requestFullscreen) st.requestFullscreen();
-  };
 
   const vsSource = `
     attribute vec3 aPos;
@@ -397,36 +443,94 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
   let lastStatTime = performance.now();
   let streamWidth = 0, streamHeight = 0;
   let fetching = false;
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
 
-  function pumpFrame() {
-    if (fetching) return;
-    fetching = true;
-    img.src = '/frame.jpg?t=' + performance.now();
+  function getInputQuery() {
+    let b = 0;
+    let lx = 0, ly = 0;
+    let lt = 0, rt = 0;
+
+    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (let i = 0; i < gamepads.length; i++) {
+      const gp = gamepads[i];
+      if (!gp || !gp.connected) continue;
+      if (gp.buttons) {
+        if (gp.buttons[0] && gp.buttons[0].pressed) b |= (1 << 0);
+        if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 1);
+        if (gp.buttons[2] && gp.buttons[2].pressed) b |= (1 << 2);
+        if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 3);
+        if (gp.buttons[12] && gp.buttons[12].pressed) b |= (1 << 4);
+        if (gp.buttons[13] && gp.buttons[13].pressed) b |= (1 << 5);
+        if (gp.buttons[14] && gp.buttons[14].pressed) b |= (1 << 6);
+        if (gp.buttons[15] && gp.buttons[15].pressed) b |= (1 << 7);
+        if (gp.buttons[9] && gp.buttons[9].pressed) b |= (1 << 8);
+        if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 9);
+        if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 10);
+        if (gp.buttons[6] && gp.buttons[6].value > 0.2) lt = Math.max(lt, gp.buttons[6].value);
+        if (gp.buttons[7] && gp.buttons[7].value > 0.2) rt = Math.max(rt, gp.buttons[7].value);
+      }
+      if (gp.axes && gp.axes.length >= 2) {
+        if (Math.abs(gp.axes[0]) > 0.15) lx = gp.axes[0];
+        if (Math.abs(gp.axes[1]) > 0.15) ly = gp.axes[1];
+      }
+    }
+
+    if (xrSession && xrSession.inputSources) {
+      for (const source of xrSession.inputSources) {
+        const gp = source.gamepad;
+        if (!gp) continue;
+        if (source.handedness === 'left') {
+          if (gp.axes && gp.axes.length >= 4) {
+            if (Math.abs(gp.axes[2]) > 0.15) lx = gp.axes[2];
+            if (Math.abs(gp.axes[3]) > 0.15) ly = gp.axes[3];
+          }
+          if (gp.buttons && gp.buttons[0] && gp.buttons[0].value > 0.2) lt = Math.max(lt, gp.buttons[0].value);
+          if (gp.buttons && gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 2);
+          if (gp.buttons && gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 8);
+          if (gp.buttons && gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 2);
+          if (gp.buttons && gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 3);
+        } else if (source.handedness === 'right') {
+          if (gp.buttons && gp.buttons[0] && gp.buttons[0].value > 0.2) rt = Math.max(rt, gp.buttons[0].value);
+          if (gp.buttons && gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 1);
+          if (gp.buttons && gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 8);
+          if (gp.buttons && gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 0);
+          if (gp.buttons && gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 1);
+        }
+      }
+    }
+
+    return 'b=' + b + '&x=' + lx.toFixed(3) + '&y=' + ly.toFixed(3) + '&lt=' + lt.toFixed(3) + '&rt=' + rt.toFixed(3);
   }
 
-  img.onload = function() {
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    streamWidth = img.naturalWidth;
-    streamHeight = img.naturalHeight;
-    frameCount++;
-    const now = performance.now();
-    if (now - lastStatTime >= 1000) {
-      const fps = ((frameCount * 1000) / (now - lastStatTime)).toFixed(1);
-      statsEl.textContent = `Live Stream: ${streamWidth}x${streamHeight} @ ${fps} FPS`;
-      frameCount = 0;
-      lastStatTime = now;
+  async function fetchFrame() {
+    if (fetching) return;
+    fetching = true;
+    try {
+      const q = getInputQuery();
+      const resp = await fetch('/frame.jpg?' + q + '&t=' + performance.now(), { cache: 'no-store' });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const blob = await resp.blob();
+      const bmp = await createImageBitmap(blob);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
+      streamWidth = bmp.width;
+      streamHeight = bmp.height;
+      bmp.close();
+      frameCount++;
+      const now = performance.now();
+      if (now - lastStatTime >= 1000) {
+        const fps = ((frameCount * 1000) / (now - lastStatTime)).toFixed(1);
+        statsEl.textContent = 'Live Stream: ' + streamWidth + 'x' + streamHeight + ' @ ' + fps + ' FPS';
+        frameCount = 0;
+        lastStatTime = now;
+      }
+      fetching = false;
+      requestAnimationFrame(fetchFrame);
+    } catch (err) {
+      fetching = false;
+      setTimeout(fetchFrame, 60);
     }
-    fetching = false;
-    setTimeout(pumpFrame, 4);
-  };
-  img.onerror = function() {
-    fetching = false;
-    setTimeout(pumpFrame, 120);
-  };
-  pumpFrame();
+  }
+  fetchFrame();
 
   function makePerspective(fovRad, aspect, near, far) {
     const f = 1.0 / Math.tan(fovRad / 2);
@@ -538,6 +642,7 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
       await gl.makeXRCompatible();
       xrSession.updateRenderState({ baseLayer: new XRWebGLLayer(xrSession, gl) });
       xrRefSpace = await xrSession.requestReferenceSpace('local');
+      if (!audioActive) toggleAudio();
       xrSession.requestAnimationFrame(onXRFrame);
     } catch (e) {
       alert('Could not start WebXR session: ' + e.message);
@@ -550,8 +655,9 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
     const pose = frame.getViewerPose(xrRefSpace);
     if (!pose) return;
 
+    // Use Right controller thumbstick strictly for distance and screen size in VR
     for (const source of session.inputSources) {
-      if (source.gamepad && source.gamepad.axes.length >= 4) {
+      if (source.handedness === 'right' && source.gamepad && source.gamepad.axes.length >= 4) {
         const axY = source.gamepad.axes[3];
         const axX = source.gamepad.axes[2];
         if (Math.abs(axY) > 0.2) screenDist = Math.max(1.0, Math.min(6.0, screenDist + axY * 0.025));
@@ -646,6 +752,66 @@ BOOL CALLBACK FindMainProcessWindowProc(HWND hwnd, LPARAM lParam)
 	return TRUE;
 }
 #endif
+
+class QuestGamepadDevice : public GamepadDevice
+{
+public:
+	QuestGamepadDevice(int maple_port = 0)
+		: GamepadDevice(maple_port, "QuestVR", false)
+	{
+		_name = "Quest VR Controller";
+		_unique_id = "quest_vr_gamepad_p" + std::to_string(maple_port);
+		input_mapper = std::make_shared<IdentityInputMapping>();
+		input_mapper->addTrigger(DC_AXIS_LT, false);
+		input_mapper->addTrigger(DC_AXIS_RT, false);
+		hasAnalogStick = true;
+	}
+
+	void refreshName() override { _name = "Quest VR Controller"; }
+	const char* get_button_name(u32 code) override { return "QuestBtn"; }
+	const char* get_axis_name(u32 code) override { return "QuestAxis"; }
+
+	void SetInput(uint32_t buttons, float joyx, float joyy, float lt, float rt)
+	{
+		gamepad_btn_input(DC_BTN_A, (buttons & (1 << 0)) != 0);
+		gamepad_btn_input(DC_BTN_B, (buttons & (1 << 1)) != 0);
+		gamepad_btn_input(DC_BTN_X, (buttons & (1 << 2)) != 0);
+		gamepad_btn_input(DC_BTN_Y, (buttons & (1 << 3)) != 0);
+		gamepad_btn_input(DC_DPAD_UP, (buttons & (1 << 4)) != 0);
+		gamepad_btn_input(DC_DPAD_DOWN, (buttons & (1 << 5)) != 0);
+		gamepad_btn_input(DC_DPAD_LEFT, (buttons & (1 << 6)) != 0);
+		gamepad_btn_input(DC_DPAD_RIGHT, (buttons & (1 << 7)) != 0);
+		gamepad_btn_input(DC_BTN_START, (buttons & (1 << 8)) != 0);
+
+		const int lt_val = ((buttons & (1 << 9)) != 0) ? 32767 : static_cast<int>(std::clamp(lt, 0.0f, 1.0f) * 65535.0f - 32768.0f);
+		const int rt_val = ((buttons & (1 << 10)) != 0) ? 32767 : static_cast<int>(std::clamp(rt, 0.0f, 1.0f) * 65535.0f - 32768.0f);
+		gamepad_axis_input(DC_AXIS_LT, lt_val);
+		gamepad_axis_input(DC_AXIS_RT, rt_val);
+
+		const int jx = static_cast<int>(std::round(std::clamp(joyx, -1.0f, 1.0f) * 32767.0f));
+		const int jy = static_cast<int>(std::round(std::clamp(joyy, -1.0f, 1.0f) * 32767.0f));
+		if (jx >= 0)
+		{
+			gamepad_axis_input(DC_AXIS_RIGHT, jx);
+			gamepad_axis_input(DC_AXIS_LEFT, 0);
+		}
+		else
+		{
+			gamepad_axis_input(DC_AXIS_LEFT, -jx);
+			gamepad_axis_input(DC_AXIS_RIGHT, 0);
+		}
+		if (jy >= 0)
+		{
+			gamepad_axis_input(DC_AXIS_DOWN, jy);
+			gamepad_axis_input(DC_AXIS_UP, 0);
+		}
+		else
+		{
+			gamepad_axis_input(DC_AXIS_UP, -jy);
+			gamepad_axis_input(DC_AXIS_DOWN, 0);
+		}
+	}
+};
 } // namespace
 
 QuestBroadcastService& QuestBroadcastService::Instance()
@@ -795,6 +961,12 @@ bool QuestBroadcastService::Start(uint16_t port, int target_fps, int jpeg_qualit
 
 	m_capture_thread = std::thread(&QuestBroadcastService::CaptureLoop, this);
 	m_server_thread = std::thread(&QuestBroadcastService::ServerLoop, this);
+
+	if (!m_vr_gamepad)
+	{
+		m_vr_gamepad = std::make_shared<QuestGamepadDevice>(0);
+		GamepadDevice::Register(m_vr_gamepad);
+	}
 	return true;
 #else
 	SetError("Quest VR Broadcast Server requires Windows sockets.");
@@ -820,9 +992,42 @@ void QuestBroadcastService::Stop()
 	if (m_server_thread.joinable())
 		m_server_thread.join();
 
+	if (m_vr_gamepad)
+	{
+		GamepadDevice::Unregister(m_vr_gamepad);
+		m_vr_gamepad.reset();
+	}
+
 #if defined(_WIN32) && !defined(TARGET_UWP)
 	WSACleanup();
 #endif
+}
+
+void QuestBroadcastPushAudio(const void* samples, size_t count)
+{
+	QuestBroadcastService::Instance().PushAudioSamples(samples, count);
+}
+
+void QuestBroadcastService::PushAudioSamples(const void* data, size_t sample_pairs)
+{
+	if (!m_running.load() || data == nullptr || sample_pairs == 0)
+		return;
+	const int16_t* pcm = static_cast<const int16_t*>(data);
+	const size_t total_samples = sample_pairs * 2;
+	std::lock_guard<std::mutex> lock(m_audio_mutex);
+	if (m_audio_buffer.size() + total_samples > 88200)
+	{
+		const size_t drop = (m_audio_buffer.size() + total_samples) - 88200;
+		m_audio_buffer.erase(m_audio_buffer.begin(), m_audio_buffer.begin() + std::min(drop, m_audio_buffer.size()));
+	}
+	m_audio_buffer.insert(m_audio_buffer.end(), pcm, pcm + total_samples);
+}
+
+void QuestBroadcastService::UpdateControllerInput(uint32_t buttons, float joyx, float joyy, float lt, float rt)
+{
+	if (!m_vr_gamepad)
+		return;
+	static_cast<QuestGamepadDevice*>(m_vr_gamepad.get())->SetInput(buttons, joyx, joyy, lt, rt);
 }
 
 bool QuestBroadcastService::CaptureFrameToJpeg(std::vector<uint8_t>& out_jpeg)
@@ -941,6 +1146,26 @@ bool QuestBroadcastService::CaptureFrameToJpeg(std::vector<uint8_t>& out_jpeg)
 		BitBlt(hdc_mem, 0, 0, crop_w, crop_h, hdc_screen, screen_x + crop_x, screen_y + crop_y, SRCCOPY);
 	}
 
+	int target_w = crop_w;
+	int target_h = crop_h;
+	const int max_w = 1280;
+	const int max_h = 720;
+	if (target_w > max_w || target_h > max_h)
+	{
+		const double scale = std::min(static_cast<double>(max_w) / target_w, static_cast<double>(max_h) / target_h);
+		target_w = static_cast<int>(target_w * scale);
+		target_h = static_cast<int>(target_h * scale);
+		if (target_w < 1) target_w = 1;
+		if (target_h < 1) target_h = 1;
+	}
+
+	HDC hdc_scaled = CreateCompatibleDC(hdc_screen);
+	HBITMAP hbm_scaled = CreateCompatibleBitmap(hdc_screen, target_w, target_h);
+	HGDIOBJ old_scaled = SelectObject(hdc_scaled, hbm_scaled);
+	SetStretchBltMode(hdc_scaled, COLORONCOLOR);
+	StretchBlt(hdc_scaled, 0, 0, target_w, target_h, hdc_mem, 0, 0, crop_w, crop_h, SRCCOPY);
+	SelectObject(hdc_scaled, old_scaled);
+
 	SelectObject(hdc_mem, old_obj);
 
 	CLSID jpeg_clsid{};
@@ -950,7 +1175,7 @@ bool QuestBroadcastService::CaptureFrameToJpeg(std::vector<uint8_t>& out_jpeg)
 		IStream* stream = nullptr;
 		if (CreateStreamOnHGlobal(nullptr, TRUE, &stream) == S_OK)
 		{
-			Gdiplus::Bitmap bmp(hbm, nullptr);
+			Gdiplus::Bitmap bmp(hbm_scaled, nullptr);
 			Gdiplus::EncoderParameters params{};
 			params.Count = 1;
 			params.Parameter[0].Guid = Gdiplus::EncoderQuality;
@@ -979,6 +1204,8 @@ bool QuestBroadcastService::CaptureFrameToJpeg(std::vector<uint8_t>& out_jpeg)
 		}
 	}
 
+	DeleteObject(hbm_scaled);
+	DeleteDC(hdc_scaled);
 	DeleteObject(hbm);
 	DeleteDC(hdc_mem);
 	ReleaseDC(nullptr, hdc_screen);
@@ -1120,9 +1347,97 @@ void QuestBroadcastService::ServerLoop()
 				return;
 			}
 
-			// 3. Handle live frame JPEG requests
+			// 2b. Handle live continuous audio streaming (44.1kHz 16-bit Stereo PCM)
+			if (std::strstr(req_buf, "/audio.wav") != nullptr)
+			{
+				uint8_t wav_hdr[44] = {};
+				std::memcpy(&wav_hdr[0], "RIFF", 4);
+				uint32_t riff_sz = 0x7fff0000;
+				std::memcpy(&wav_hdr[4], &riff_sz, 4);
+				std::memcpy(&wav_hdr[8], "WAVEfmt ", 8);
+				uint32_t sub1_sz = 16;
+				uint16_t audio_fmt = 1; // PCM
+				uint16_t num_ch = 2; // Stereo
+				uint32_t sample_rate = 44100;
+				uint32_t byte_rate = 44100 * 2 * 2;
+				uint16_t block_align = 4;
+				uint16_t bits_per_sample = 16;
+				std::memcpy(&wav_hdr[16], &sub1_sz, 4);
+				std::memcpy(&wav_hdr[20], &audio_fmt, 2);
+				std::memcpy(&wav_hdr[22], &num_ch, 2);
+				std::memcpy(&wav_hdr[24], &sample_rate, 4);
+				std::memcpy(&wav_hdr[28], &byte_rate, 4);
+				std::memcpy(&wav_hdr[32], &block_align, 2);
+				std::memcpy(&wav_hdr[34], &bits_per_sample, 2);
+				std::memcpy(&wav_hdr[36], "data", 4);
+				uint32_t data_sz = 0x7fff0000 - 36;
+				std::memcpy(&wav_hdr[40], &data_sz, 4);
+
+				std::ostringstream hdr;
+				hdr << "HTTP/1.1 200 OK\r\n"
+					<< "Content-Type: audio/wav\r\n"
+					<< "Cache-Control: no-cache, no-store, must-revalidate\r\n"
+					<< "Access-Control-Allow-Origin: *\r\n"
+					<< "Connection: close\r\n\r\n";
+				const std::string hdr_str = hdr.str();
+				if (!SendAll(client_sock, hdr_str.data(), hdr_str.size()) ||
+					!SendAll(client_sock, wav_hdr, sizeof(wav_hdr)))
+				{
+					GracefulClose(client_sock);
+					return;
+				}
+
+				std::vector<int16_t> pcm_chunk;
+				pcm_chunk.reserve(4096);
+				while (m_running.load())
+				{
+					pcm_chunk.clear();
+					{
+						std::lock_guard<std::mutex> lock(m_audio_mutex);
+						if (!m_audio_buffer.empty())
+						{
+							size_t grab = std::min(m_audio_buffer.size(), size_t(4096));
+							pcm_chunk.assign(m_audio_buffer.begin(), m_audio_buffer.begin() + grab);
+							m_audio_buffer.erase(m_audio_buffer.begin(), m_audio_buffer.begin() + grab);
+						}
+					}
+
+					if (!pcm_chunk.empty())
+					{
+						if (!SendAll(client_sock, pcm_chunk.data(), pcm_chunk.size() * sizeof(int16_t)))
+							break;
+					}
+					else
+					{
+						std::this_thread::sleep_for(std::chrono::milliseconds(8));
+					}
+				}
+				GracefulClose(client_sock);
+				return;
+			}
+
+			// 3. Handle live frame JPEG requests and parse input queries
 			if (std::strstr(req_buf, "/frame.jpg") != nullptr)
 			{
+				const char* q = std::strstr(req_buf, "/frame.jpg?");
+				if (q)
+				{
+					uint32_t btns = 0;
+					float jx = 0.0f, jy = 0.0f, lt = 0.0f, rt = 0.0f;
+					const char* pb = std::strstr(q, "b=");
+					if (pb) btns = static_cast<uint32_t>(std::strtoul(pb + 2, nullptr, 10));
+					const char* px = std::strstr(q, "x=");
+					if (px) jx = std::strtof(px + 2, nullptr);
+					const char* py = std::strstr(q, "y=");
+					if (py) jy = std::strtof(py + 2, nullptr);
+					const char* plt = std::strstr(q, "lt=");
+					if (plt) lt = std::strtof(plt + 3, nullptr);
+					const char* prt = std::strstr(q, "rt=");
+					if (prt) rt = std::strtof(prt + 3, nullptr);
+
+					UpdateControllerInput(btns, jx, jy, lt, rt);
+				}
+
 				std::vector<uint8_t> jpeg_copy;
 				{
 					std::lock_guard<std::mutex> lock(m_frame_mutex);
