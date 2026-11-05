@@ -79,6 +79,7 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
   html, body {
     width: 100vw; height: 100vh;
+    position: fixed; top: 0; left: 0;
     overflow: hidden !important;
     background: radial-gradient(circle at top, #141e33, #060911 75%);
     color: var(--text);
@@ -140,6 +141,7 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
     flex-wrap: wrap;
     gap: 8px;
     justify-content: center;
+    align-items: center;
     padding: 8px 14px;
     background: var(--panel);
     border: 1px solid rgba(255,255,255,0.12);
@@ -161,6 +163,14 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
     transition: all 0.15s ease;
   }
   button:hover { background: #263859; border-color: var(--accent); }
+  button.theater-btn {
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: #ffffff;
+    border: none;
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  }
+  button.theater-btn:hover { filter: brightness(1.15); }
   button.primary {
     background: linear-gradient(135deg, #2563eb, #1d4ed8);
     color: #ffffff;
@@ -175,10 +185,19 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
     font-weight: 700;
   }
   button.audio-btn {
-    background: #059669;
+    background: #4b5563;
     color: #fff;
     border: none;
     font-weight: 700;
+  }
+  button.audio-btn.live {
+    background: #059669;
+  }
+  button.mode-btn.active {
+    background: #2563eb;
+    border-color: #60a5fa;
+    color: #fff;
+    box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
   }
   .sliders {
     display: flex;
@@ -215,11 +234,120 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
     width: 100%;
     height: 100%;
     display: block;
+    cursor: pointer;
+  }
+  body.theater-mode {
+    background: #000;
+  }
+  body.theater-mode header,
+  body.theater-mode .toolbar {
+    display: none !important;
+  }
+  body.theater-mode .stage {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    z-index: 100 !important;
+  }
+  .float-menu-btn {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 200;
+    background: rgba(15, 23, 42, 0.75);
+    color: #f1f5f9;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: none;
+    backdrop-filter: blur(10px);
+  }
+  .float-menu-btn:hover {
+    background: #1e293b;
+    border-color: #38bdf8;
+  }
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+    padding: 16px;
+  }
+  .modal-card {
+    background: #0f172a;
+    border: 1px solid rgba(59, 130, 246, 0.5);
+    border-radius: 16px;
+    max-width: 600px;
+    width: 100%;
+    padding: 22px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.85);
+    color: #e2e8f0;
+  }
+  .modal-card h3 {
+    color: #38bdf8;
+    margin-bottom: 10px;
+    font-size: 1.2rem;
+  }
+  .step-box {
+    background: rgba(255,255,255,0.05);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    line-height: 1.6;
+    font-size: 0.88rem;
+  }
+  .step-box code {
+    background: #1e293b;
+    color: #38bdf8;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-weight: 700;
+  }
+  .modal-btns {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 14px;
+    flex-wrap: wrap;
   }
 </style>
 </head>
 <body>
 <audio id="streamAudio" preload="none"></audio>
+<button id="btnFloatMenu" class="float-menu-btn">⚙️ Settings / Exit Theater</button>
+
+<div id="xrModal" class="modal-overlay" style="display: none;">
+  <div class="modal-card">
+    <h3>🥽 Meta Quest WebXR Security Step</h3>
+    <p>Meta Quest Browser requires local network Wi-Fi origins to be allowed before enabling WebXR (6DoF Mixed Reality &amp; VR Cinema):</p>
+    <div class="step-box">
+      <b>To activate 6DoF WebXR in Quest Browser:</b><br>
+      1. Open a new tab and go to: <code>chrome://flags</code><br>
+      2. Search: <b>Insecure origins treated as secure</b><br>
+      3. Enter: <code id="modalUrl">http://...</code><br>
+      4. Set dropdown to <b>Enabled</b> and tap <b>Relaunch</b> at bottom.
+    </div>
+    <div class="modal-btns">
+      <button class="theater-btn" id="btnModalTheater">🎬 Play in Giant IMAX Cinema Now</button>
+      <button id="btnModalClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <header>
   <div class="brand">
     <span>FLYCAST DREAMCAST VR STUDIO</span>
@@ -230,19 +358,20 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
 </header>
 
 <div class="toolbar">
-  <button class="primary" id="btnEnterAR">🥽 Enter Mixed Reality (Passthrough)</button>
-  <button class="vr-btn" id="btnEnterVR">🌌 Enter VR Cinema (Curved IMAX)</button>
+  <button class="theater-btn" id="btnLaunchTheater">🎬 Launch IMAX Cinema (Theater View)</button>
   <button class="audio-btn" id="btnToggleAudio">🔊 Sound: Tap to Start</button>
-  <button id="btnMode2D">2D Cinema</button>
-  <button id="btnModeSBS">SBS 3D Depth</button>
-  <button id="btnModeTB">Top-Bottom 3D</button>
-  <button id="btnModeAnaglyph">Anaglyph 3D</button>
+  <button class="primary" id="btnEnterAR">🥽 Mixed Reality (Passthrough)</button>
+  <button class="vr-btn" id="btnEnterVR">🌌 VR Cinema (Void)</button>
+  <button class="mode-btn active" id="btnMode2D">2D Standard</button>
+  <button class="mode-btn" id="btnModeSBS">SBS 3D Depth</button>
+  <button class="mode-btn" id="btnModeTB">Top-Bottom 3D</button>
+  <button class="mode-btn" id="btnModeAnaglyph">Anaglyph 3D</button>
   <button id="btnRecenter">Recenter View</button>
 
   <div class="sliders">
-    <label>Distance: <input type="range" id="rngDist" min="1.0" max="6.0" step="0.1" value="2.4"><span id="valDist">2.4m</span></label>
-    <label>Scale: <input type="range" id="rngScale" min="0.5" max="3.0" step="0.05" value="1.35"><span id="valScale">1.35x</span></label>
-    <label>Curvature: <input type="range" id="rngCurve" min="0.0" max="0.6" step="0.02" value="0.18"><span id="valCurve">0.18</span></label>
+    <label>Distance: <input type="range" id="rngDist" min="1.0" max="6.0" step="0.1" value="2.0"><span id="valDist">2.0m</span></label>
+    <label>Scale: <input type="range" id="rngScale" min="0.5" max="3.0" step="0.05" value="1.55"><span id="valScale">1.55x</span></label>
+    <label>Curvature: <input type="range" id="rngCurve" min="0.0" max="0.6" step="0.02" value="0.16"><span id="valCurve">0.16</span></label>
     <label>3D Depth: <input type="range" id="rngDepth" min="0.0" max="0.06" step="0.002" value="0.016"><span id="valDepth">0.016</span></label>
   </div>
 </div>
@@ -253,15 +382,11 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
 
 <script>
 (function() {
-  // Lock out Android page scrolling from gamepad/joystick and prevent B/Escape from exiting
+  const navKeys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End']);
   window.addEventListener('keydown', (e) => {
-    if (e.key !== 'F11' && e.key !== 'F12') e.preventDefault();
+    if (navKeys.has(e.key)) e.preventDefault();
   }, { passive: false });
-  window.addEventListener('keyup', (e) => {
-    if (e.key !== 'F11' && e.key !== 'F12') e.preventDefault();
-  }, { passive: false });
-  window.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
-  document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+  window.addEventListener('scroll', () => window.scrollTo(0, 0), { passive: false });
 
   const canvas = document.getElementById('glcanvas');
   const statsEl = document.getElementById('stats');
@@ -275,18 +400,17 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
   function toggleAudio() {
     const a = document.getElementById('streamAudio');
     if (!a) return;
+    const b = document.getElementById('btnToggleAudio');
     if (audioActive) {
       a.pause();
       a.src = '';
       audioActive = false;
-      const b = document.getElementById('btnToggleAudio');
-      if (b) { b.textContent = '🔇 Sound: Muted'; b.style.background = '#4b5563'; }
+      if (b) { b.textContent = '🔇 Sound: Muted'; b.classList.remove('live'); }
     } else {
       a.src = '/audio.wav?t=' + Date.now();
       a.play().then(() => {
         audioActive = true;
-        const b = document.getElementById('btnToggleAudio');
-        if (b) { b.textContent = '🔊 Sound: Live'; b.style.background = '#059669'; }
+        if (b) { b.textContent = '🔊 Sound: Live'; b.classList.add('live'); }
       }).catch(e => console.log('Audio autoplay prevented:', e));
     }
   }
@@ -294,10 +418,39 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
   window.addEventListener('click', () => { if (!audioActive) toggleAudio(); }, { once: true });
   window.addEventListener('touchstart', () => { if (!audioActive) toggleAudio(); }, { once: true });
 
+  let theaterActive = false;
+  function setTheaterMode(active) {
+    theaterActive = active;
+    const floatBtn = document.getElementById('btnFloatMenu');
+    if (theaterActive) {
+      document.body.classList.add('theater-mode');
+      if (floatBtn) floatBtn.style.display = 'block';
+      if (!audioActive) toggleAudio();
+    } else {
+      document.body.classList.remove('theater-mode');
+      if (floatBtn) floatBtn.style.display = 'none';
+    }
+  }
+  document.getElementById('btnLaunchTheater').onclick = () => setTheaterMode(true);
+  document.getElementById('btnFloatMenu').onclick = () => setTheaterMode(false);
+  canvas.addEventListener('dblclick', () => setTheaterMode(!theaterActive));
+
+  const modal = document.getElementById('xrModal');
+  document.getElementById('btnModalClose').onclick = () => { modal.style.display = 'none'; };
+  document.getElementById('btnModalTheater').onclick = () => {
+    modal.style.display = 'none';
+    setTheaterMode(true);
+  };
+  function showXRHelp() {
+    const urlEl = document.getElementById('modalUrl');
+    if (urlEl) urlEl.textContent = window.location.origin;
+    if (modal) modal.style.display = 'flex';
+  }
+
   let renderMode = 0; // 0=2D, 1=SBS, 2=TopBottom, 3=Anaglyph
-  let screenDist = 2.4;
-  let screenScale = 1.35;
-  let screenCurve = 0.18;
+  let screenDist = 2.0;
+  let screenScale = 1.55;
+  let screenCurve = 0.16;
   let depthStrength = 0.016;
   let yawOffset = 0.0;
 
@@ -315,10 +468,24 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
   bindSlider('rngCurve', 'valCurve', '', v => { screenCurve = v; rebuildMesh(); });
   bindSlider('rngDepth', 'valDepth', '', v => depthStrength = v);
 
-  document.getElementById('btnMode2D').onclick = () => renderMode = 0;
-  document.getElementById('btnModeSBS').onclick = () => renderMode = 1;
-  document.getElementById('btnModeTB').onclick = () => renderMode = 2;
-  document.getElementById('btnModeAnaglyph').onclick = () => renderMode = 3;
+  const modeBtns = [
+    { id: 'btnMode2D', mode: 0 },
+    { id: 'btnModeSBS', mode: 1 },
+    { id: 'btnModeTB', mode: 2 },
+    { id: 'btnModeAnaglyph', mode: 3 }
+  ];
+  modeBtns.forEach(({ id, mode }) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.onclick = () => {
+        renderMode = mode;
+        modeBtns.forEach(b => {
+          const bEl = document.getElementById(b.id);
+          if (bEl) bEl.classList.toggle('active', b.mode === mode);
+        });
+      };
+    }
+  });
   document.getElementById('btnRecenter').onclick = () => { yawOffset = lastHeadYaw; };
 
   const vsSource = `
@@ -509,12 +676,36 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
       const resp = await fetch('/frame.jpg?' + q + '&t=' + performance.now(), { cache: 'no-store' });
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       const blob = await resp.blob();
-      const bmp = await createImageBitmap(blob);
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
-      streamWidth = bmp.width;
-      streamHeight = bmp.height;
-      bmp.close();
+      if (!blob || blob.size === 0) throw new Error('Empty blob');
+
+      let bmp = null;
+      if (window.createImageBitmap) {
+        try {
+          bmp = await createImageBitmap(blob);
+        } catch (e) {}
+      }
+
+      if (bmp) {
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
+        streamWidth = bmp.width;
+        streamHeight = bmp.height;
+        bmp.close();
+      } else {
+        await new Promise((resolve, reject) => {
+          const tempImg = new Image();
+          tempImg.onload = () => {
+            gl.bindTexture(gl.TEXTURE_2D, tex);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tempImg);
+            streamWidth = tempImg.naturalWidth;
+            streamHeight = tempImg.naturalHeight;
+            resolve();
+          };
+          tempImg.onerror = reject;
+          tempImg.src = URL.createObjectURL(blob);
+        });
+      }
+
       frameCount++;
       const now = performance.now();
       if (now - lastStatTime >= 1000) {
@@ -585,12 +776,15 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
 
   function render2D() {
     if (xrSession) return;
-    if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
-      canvas.width = canvas.clientWidth;
-      canvas.height = canvas.clientHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.0);
+    const targetW = Math.floor(canvas.clientWidth * dpr);
+    const targetH = Math.floor(canvas.clientHeight * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.clearColor(0.03, 0.05, 0.09, 1.0);
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
 
@@ -622,14 +816,18 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
 
   async function startXR(mode) {
     if (!navigator.xr) {
-      alert('WebXR is not available in this browser. Open this URL inside Meta Quest Browser over HTTPS or localhost/LAN.');
+      showXRHelp();
       return;
     }
     try {
       const supported = await navigator.xr.isSessionSupported(mode);
       if (!supported && mode === 'immersive-ar') {
-        alert('immersive-ar not supported on this device, falling back to immersive-vr.');
         mode = 'immersive-vr';
+        const vrSupp = await navigator.xr.isSessionSupported('immersive-vr');
+        if (!vrSupp) {
+          showXRHelp();
+          return;
+        }
       }
       isAR = (mode === 'immersive-ar');
       xrSession = await navigator.xr.requestSession(mode, {
@@ -645,7 +843,8 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
       if (!audioActive) toggleAudio();
       xrSession.requestAnimationFrame(onXRFrame);
     } catch (e) {
-      alert('Could not start WebXR session: ' + e.message);
+      console.error('WebXR session error:', e);
+      showXRHelp();
     }
   }
 
@@ -1786,11 +1985,12 @@ void gui_settings_quest_vr()
 		ImGui::Columns(1, nullptr, false);
 
 		ImGui::Spacing();
-		ImGui::TextColored(ImVec4(0.35f, 0.72f, 1.00f, 1.0f), ICON_FA_VR_CARDBOARD " %s", T("How to Connect on Meta Quest 2 / Quest 3 / Quest 3S / Quest Pro:"));
+		ImGui::TextColored(ImVec4(0.35f, 0.72f, 1.00f, 1.0f), ICON_FA_VR_CARDBOARD " %s", T("How to Play on Meta Quest 2 / Quest 3 / Quest 3S / Quest Pro:"));
 		ImGui::BulletText("%s", T("1. Connect your Meta Quest headset to the same Wi-Fi / LAN network as this PC."));
-		ImGui::BulletText("%s", T("2. Click 'Start Wireless Quest VR Broadcast' above and open the Stream URL in Meta Quest Browser."));
-		ImGui::BulletText("%s", T("3. Tap 'Enter Mixed Reality (Passthrough)' to anchor your Dreamcast screen in your real room, or 'Enter VR Cinema' for a curved theater."));
-		ImGui::BulletText("%s", T("4. Playing 2-Player or 4-Player split-screen (Sonic Adventure 2, Power Stone 2, Quake III)? Select a Split-Screen Crop Mode to give the headset its own dedicated fullscreen view!"));
+		ImGui::BulletText("%s", T("2. Click 'Start Wireless Quest VR Broadcast' and open the Stream URL in Meta Quest Browser."));
+		ImGui::BulletText("%s", T("3. Instant Play: Tap 'Launch IMAX Cinema' in Quest Browser for an instant giant curved theater screen right in your headset room with zero setup!"));
+		ImGui::BulletText("%s", T("4. Immersive 6DoF Passthrough WebXR: To enable WebXR in Quest Browser, visit chrome://flags, search 'Insecure origins treated as secure', enter this Stream URL, set to Enabled, and tap Relaunch."));
+		ImGui::BulletText("%s", T("5. Multiplayer: Select a Split-Screen Crop Mode above to give the headset its own dedicated private view (Sonic Adventure 2, Power Stone 2, etc.)!"));
 	}
 }
 
