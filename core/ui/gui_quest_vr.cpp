@@ -1038,6 +1038,31 @@ void QuestBroadcastService::CaptureLoop()
 #endif
 }
 
+#if defined(_WIN32) && !defined(TARGET_UWP)
+static bool SendAll(SOCKET s, const void* data, size_t total_len)
+{
+	const char* ptr = static_cast<const char*>(data);
+	size_t sent = 0;
+	while (sent < total_len)
+	{
+		int chunk = static_cast<int>((total_len - sent) > 65536 ? 65536 : (total_len - sent));
+		int res = send(s, ptr + sent, chunk, 0);
+		if (res <= 0)
+			return false;
+		sent += res;
+	}
+	return true;
+}
+
+static void GracefulClose(SOCKET s)
+{
+	shutdown(s, SD_SEND);
+	char drain[512];
+	while (recv(s, drain, sizeof(drain), 0) > 0) {}
+	closesocket(s);
+}
+#endif
+
 void QuestBroadcastService::ServerLoop()
 {
 #if defined(_WIN32) && !defined(TARGET_UWP)
@@ -1055,60 +1080,113 @@ void QuestBroadcastService::ServerLoop()
 		}
 
 		std::thread([this, client_sock]() {
-			DWORD timeout_ms = 2500;
+			DWORD timeout_ms = 3000;
 			setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout_ms), sizeof(timeout_ms));
 			setsockopt(client_sock, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&timeout_ms), sizeof(timeout_ms));
 
-			char req_buf[2048] = {};
+			char req_buf[8192] = {};
 			const int recvd = recv(client_sock, req_buf, sizeof(req_buf) - 1, 0);
-			if (recvd > 0)
+			if (recvd <= 0)
 			{
-				req_buf[recvd] = '\0';
-				if (std::strstr(req_buf, "GET /frame.jpg") != nullptr)
-				{
-					std::vector<uint8_t> jpeg_copy;
-					{
-						std::lock_guard<std::mutex> lock(m_frame_mutex);
-						jpeg_copy = m_latest_jpeg;
-					}
+				closesocket(client_sock);
+				return;
+			}
+			req_buf[recvd] = '\0';
 
-					if (!jpeg_copy.empty())
-					{
-						std::ostringstream hdr;
-						hdr << "HTTP/1.1 200 OK\r\n"
-							<< "Content-Type: image/jpeg\r\n"
-							<< "Content-Length: " << jpeg_copy.size() << "\r\n"
-							<< "Cache-Control: no-store, no-cache, must-revalidate, max-age=0\r\n"
-							<< "Access-Control-Allow-Origin: *\r\n"
-							<< "Connection: close\r\n\r\n";
-						const std::string hdr_str = hdr.str();
-						send(client_sock, hdr_str.c_str(), static_cast<int>(hdr_str.size()), 0);
-						send(client_sock, reinterpret_cast<const char*>(jpeg_copy.data()), static_cast<int>(jpeg_copy.size()), 0);
-						m_frames_served.fetch_add(1);
-					}
-					else
-					{
-						const char* resp = "HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n";
-						send(client_sock, resp, static_cast<int>(std::strlen(resp)), 0);
-					}
-				}
-				else
+			// 1. Handle preflight CORS OPTIONS requests
+			if (std::strncmp(req_buf, "OPTIONS", 7) == 0)
+			{
+				static const char kRespOptions[] =
+					"HTTP/1.1 204 No Content\r\n"
+					"Access-Control-Allow-Origin: *\r\n"
+					"Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\n"
+					"Access-Control-Allow-Headers: *\r\n"
+					"Access-Control-Max-Age: 86400\r\n"
+					"Connection: close\r\n\r\n";
+				SendAll(client_sock, kRespOptions, sizeof(kRespOptions) - 1);
+				GracefulClose(client_sock);
+				return;
+			}
+
+			// 2. Handle browser favicon / touch icons with 204 No Content
+			if (std::strstr(req_buf, "/favicon.ico") != nullptr || std::strstr(req_buf, "apple-touch-icon") != nullptr)
+			{
+				static const char kResp204[] =
+					"HTTP/1.1 204 No Content\r\n"
+					"Access-Control-Allow-Origin: *\r\n"
+					"Connection: close\r\n\r\n";
+				SendAll(client_sock, kResp204, sizeof(kResp204) - 1);
+				GracefulClose(client_sock);
+				return;
+			}
+
+			// 3. Handle live frame JPEG requests
+			if (std::strstr(req_buf, "/frame.jpg") != nullptr)
+			{
+				std::vector<uint8_t> jpeg_copy;
 				{
-					static const std::string kFullHtml = std::string(kQuestWebXRAppHtml1) + kQuestWebXRAppHtml2;
-					const size_t html_len = kFullHtml.size();
+					std::lock_guard<std::mutex> lock(m_frame_mutex);
+					jpeg_copy = m_latest_jpeg;
+				}
+
+				if (!jpeg_copy.empty())
+				{
+					// To prevent ERR_RESPONSE_HEADERS_MULTIPLE_CONTENT_LENGTH caused by proxies or antivirus
+					// duplicating Content-Length on close-delimited streams, omit Content-Length and use Connection: close
 					std::ostringstream hdr;
 					hdr << "HTTP/1.1 200 OK\r\n"
-						<< "Content-Type: text/html; charset=utf-8\r\n"
-						<< "Content-Length: " << html_len << "\r\n"
-						<< "Cache-Control: no-cache\r\n"
+						<< "Content-Type: image/jpeg\r\n"
+						<< "Cache-Control: no-store, no-cache, must-revalidate, max-age=0\r\n"
 						<< "Access-Control-Allow-Origin: *\r\n"
 						<< "Connection: close\r\n\r\n";
 					const std::string hdr_str = hdr.str();
-					send(client_sock, hdr_str.c_str(), static_cast<int>(hdr_str.size()), 0);
-					send(client_sock, kFullHtml.c_str(), static_cast<int>(html_len), 0);
+					std::vector<uint8_t> payload;
+					payload.reserve(hdr_str.size() + jpeg_copy.size());
+					payload.insert(payload.end(), hdr_str.begin(), hdr_str.end());
+					payload.insert(payload.end(), jpeg_copy.begin(), jpeg_copy.end());
+
+					SendAll(client_sock, payload.data(), payload.size());
+					m_frames_served.fetch_add(1);
 				}
+				else
+				{
+					static const char kResp503[] =
+						"HTTP/1.1 503 Service Unavailable\r\n"
+						"Access-Control-Allow-Origin: *\r\n"
+						"Connection: close\r\n\r\n";
+					SendAll(client_sock, kResp503, sizeof(kResp503) - 1);
+				}
+				GracefulClose(client_sock);
+				return;
 			}
-			closesocket(client_sock);
+
+			// 4. Handle HEAD requests
+			if (std::strncmp(req_buf, "HEAD", 4) == 0)
+			{
+				std::ostringstream hdr;
+				hdr << "HTTP/1.1 200 OK\r\n"
+					<< "Content-Type: text/html; charset=utf-8\r\n"
+					<< "Cache-Control: no-cache, no-store, must-revalidate\r\n"
+					<< "Access-Control-Allow-Origin: *\r\n"
+					<< "Connection: close\r\n\r\n";
+				const std::string hdr_str = hdr.str();
+				SendAll(client_sock, hdr_str.data(), hdr_str.size());
+				GracefulClose(client_sock);
+				return;
+			}
+
+			// 5. Handle WebXR HTML Studio app
+			static const std::string kFullHtml = std::string(kQuestWebXRAppHtml1) + kQuestWebXRAppHtml2;
+			std::ostringstream hdr;
+			hdr << "HTTP/1.1 200 OK\r\n"
+				<< "Content-Type: text/html; charset=utf-8\r\n"
+				<< "Cache-Control: no-cache, no-store, must-revalidate\r\n"
+				<< "Access-Control-Allow-Origin: *\r\n"
+				<< "Connection: close\r\n\r\n";
+			const std::string hdr_str = hdr.str();
+			std::string payload = hdr_str + kFullHtml;
+			SendAll(client_sock, payload.data(), payload.size());
+			GracefulClose(client_sock);
 		}).detach();
 	}
 #endif
