@@ -673,96 +673,86 @@ static const char* kQuestWebXRAppHtml4 = R"HTML(function getInputQuery() {
     let lx = 0, ly = 0;
     let lt = 0, rt = 0;
 
-    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
-    for (let i = 0; i < gamepads.length; i++) {
-      const gp = gamepads[i];
-      if (!gp || !gp.connected) continue;
-
-      const idLower = (gp.id || '').toLowerCase();
-      const isTouch = idLower.includes('oculus') || idLower.includes('touch') || idLower.includes('quest') || gp.hand;
-
-      if (isTouch) {
-        const isLeft = (gp.hand === 'left' || idLower.includes('left'));
-        const isRight = (gp.hand === 'right' || idLower.includes('right'));
-
-        if (isLeft) {
-          if (gp.axes && gp.axes.length >= 2) {
-            if (Math.abs(gp.axes[0]) > 0.15) lx = gp.axes[0];
-            if (Math.abs(gp.axes[1]) > 0.15) ly = gp.axes[1];
-          }
-          if (gp.buttons) {
-            if (gp.buttons[1] && gp.buttons[1].value > 0.2) lt = Math.max(lt, gp.buttons[1].value);
-            if (gp.buttons[2] && gp.buttons[2].pressed) b |= (1 << 11);
-            if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 2);  // X
-            if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 3);  // Y
-            if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 9);  // Menu -> Coin
-            if (gp.buttons[0] && gp.buttons[0].pressed) b |= (1 << 8);  // Stick click -> Start
-          }
-        } else if (isRight) {
-          if (gp.buttons) {
-            if (gp.buttons[1] && gp.buttons[1].value > 0.2) rt = Math.max(rt, gp.buttons[1].value);
-            if (gp.buttons[2] && gp.buttons[2].pressed) b |= (1 << 12);
-            if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 0);  // A
-            if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 1);  // B
-            if (gp.buttons[0] && gp.buttons[0].pressed) b |= (1 << 8);  // Stick click -> Start
-          }
-        }
-      } else {
-        if (gp.buttons) {
-          if (gp.buttons[0] && gp.buttons[0].pressed) b |= (1 << 0);
-          if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 1);
-          if (gp.buttons[2] && gp.buttons[2].pressed) b |= (1 << 2);
-          if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 3);
-          if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 11);
-          if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 12);
-          if (gp.buttons[6] && gp.buttons[6].value > 0.2) lt = Math.max(lt, gp.buttons[6].value);
-          if (gp.buttons[7] && gp.buttons[7].value > 0.2) rt = Math.max(rt, gp.buttons[7].value);
-          if (gp.buttons[8] && gp.buttons[8].pressed) b |= (1 << 9);  // Select/Back -> Coin
-          if (gp.buttons[9] && gp.buttons[9].pressed) b |= (1 << 8);  // Start
-          if (gp.buttons[12] && gp.buttons[12].pressed) b |= (1 << 4);
-          if (gp.buttons[13] && gp.buttons[13].pressed) b |= (1 << 5);
-          if (gp.buttons[14] && gp.buttons[14].pressed) b |= (1 << 6);
-          if (gp.buttons[15] && gp.buttons[15].pressed) b |= (1 << 7);
-        }
-        if (gp.axes && gp.axes.length >= 2) {
-          if (Math.abs(gp.axes[0]) > 0.15) lx = gp.axes[0];
-          if (Math.abs(gp.axes[1]) > 0.15) ly = gp.axes[1];
-          if (gp.axes.length >= 6) {
-            if (gp.axes[4] < -0.5) b |= (1 << 6);
-            if (gp.axes[4] > 0.5) b |= (1 << 7);
-            if (gp.axes[5] < -0.5) b |= (1 << 4);
-            if (gp.axes[5] > 0.5) b |= (1 << 5);
-          }
-        }
-      }
-    }
-
+    // 1. WebXR Immersive Session Controllers
     if (xrSession && xrSession.inputSources) {
       for (const source of xrSession.inputSources) {
         const gp = source.gamepad;
         if (!gp) continue;
         if (source.handedness === 'left') {
+          let ax = 0, ay = 0;
           if (gp.axes && gp.axes.length >= 4) {
-            if (Math.abs(gp.axes[2]) > 0.15) lx = gp.axes[2];
-            if (Math.abs(gp.axes[3]) > 0.15) ly = gp.axes[3];
+            ax = gp.axes[2];
+            ay = gp.axes[3];
+          } else if (gp.axes && gp.axes.length >= 2) {
+            ax = gp.axes[0];
+            ay = gp.axes[1];
           }
+          if (Math.abs(ax) > 0.15) lx = ax;
+          if (Math.abs(ay) > 0.15) ly = ay;
+
+          // Map stick to D-pad
+          if (lx < -0.45) b |= (1 << 6);
+          if (lx > 0.45)  b |= (1 << 7);
+          if (ly < -0.45) b |= (1 << 4);
+          if (ly > 0.45)  b |= (1 << 5);
+
           if (gp.buttons) {
             if (gp.buttons[0] && gp.buttons[0].value > 0.2) lt = Math.max(lt, gp.buttons[0].value);
-            if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 11);
-            if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 9);
-            if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 2);
-            if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 3);
+            if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 11); // Grip -> L Trigger
+            if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 8);  // Stick click -> Start
+            if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 2);  // X button
+            if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 3);  // Y button
+            if (gp.buttons[6] && gp.buttons[6].pressed) b |= (1 << 9);  // Menu button -> Coin
           }
         } else if (source.handedness === 'right') {
           if (gp.buttons) {
             if (gp.buttons[0] && gp.buttons[0].value > 0.2) rt = Math.max(rt, gp.buttons[0].value);
-            if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 12);
-            if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 8);
-            if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 0);
-            if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 1);
+            if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 12); // Grip -> R Trigger
+            if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 8);  // Stick click -> Start
+            if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 0);  // A button
+            if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 1);  // B button
           }
         }
       }
+    }
+
+    // 2. Standard Bluetooth Gamepads (Xbox, PS4/5, 8BitDo)
+    const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (let i = 0; i < gamepads.length; i++) {
+      const gp = gamepads[i];
+      if (!gp || !gp.connected) continue;
+      const idLower = (gp.id || '').toLowerCase();
+      const isTouch = idLower.includes('oculus') || idLower.includes('touch') || idLower.includes('quest') || gp.hand;
+      if (!isTouch) {
+        if (gp.buttons) {
+          if (gp.buttons[0] && gp.buttons[0].pressed) b |= (1 << 0); // A
+          if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 1); // B
+          if (gp.buttons[2] && gp.buttons[2].pressed) b |= (1 << 2); // X
+          if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 3); // Y
+          if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 11); // LB
+          if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 12); // RB
+          if (gp.buttons[6] && gp.buttons[6].value > 0.2) lt = Math.max(lt, gp.buttons[6].value);
+          if (gp.buttons[7] && gp.buttons[7].value > 0.2) rt = Math.max(rt, gp.buttons[7].value);
+          if (gp.buttons[8] && gp.buttons[8].pressed) b |= (1 << 9);  // Back/Select -> Coin
+          if (gp.buttons[9] && gp.buttons[9].pressed) b |= (1 << 8);  // Start
+          if (gp.buttons[12] && gp.buttons[12].pressed) b |= (1 << 4); // Dpad Up
+          if (gp.buttons[13] && gp.buttons[13].pressed) b |= (1 << 5); // Dpad Down
+          if (gp.buttons[14] && gp.buttons[14].pressed) b |= (1 << 6); // Dpad Left
+          if (gp.buttons[15] && gp.buttons[15].pressed) b |= (1 << 7); // Dpad Right
+        }
+        if (gp.axes && gp.axes.length >= 2) {
+          if (Math.abs(gp.axes[0]) > 0.15) lx = gp.axes[0];
+          if (Math.abs(gp.axes[1]) > 0.15) ly = gp.axes[1];
+          if (lx < -0.45) b |= (1 << 6);
+          if (lx > 0.45)  b |= (1 << 7);
+          if (ly < -0.45) b |= (1 << 4);
+          if (ly > 0.45)  b |= (1 << 5);
+        }
+      }
+    }
+
+    if (pointerDown) {
+      b |= (1 << 0); // Pointer click also triggers A button
     }
 
     let q = 'b=' + b + '&x=' + lx.toFixed(3) + '&y=' + ly.toFixed(3) + '&lt=' + lt.toFixed(3) + '&rt=' + rt.toFixed(3);
@@ -771,6 +761,22 @@ static const char* kQuestWebXRAppHtml4 = R"HTML(function getInputQuery() {
     }
     return q;
   }
+
+  // Ultra-fast dedicated input loop (60Hz)
+  let lastSentQuery = '';
+  let queryHoldCount = 0;
+  async function fastInputPoll() {
+    try {
+      const q = getInputQuery();
+      queryHoldCount++;
+      if (q !== lastSentQuery || queryHoldCount >= 3) {
+        lastSentQuery = q;
+        queryHoldCount = 0;
+        fetch('/input?' + q, { method: 'GET', cache: 'no-store' });
+      }
+    } catch (e) {}
+  }
+  setInterval(fastInputPoll, 16);
 
   async function fetchFrame() {
     if (fetching) return;
@@ -784,45 +790,23 @@ static const char* kQuestWebXRAppHtml4 = R"HTML(function getInputQuery() {
 
       let bmp = null;
       if (window.createImageBitmap) {
-        try {
-          bmp = await createImageBitmap(blob);
-        } catch (e) {}
-      }
-
-      if (bmp) {
-        gl.bindTexture(gl.TEXTURE_2D, tex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
-        streamWidth = bmp.width;
-        streamHeight = bmp.height;
-        bmp.close();
+        bmp = await createImageBitmap(blob);
       } else {
-        await new Promise((resolve, reject) => {
-          const tempImg = new Image();
-          tempImg.onload = () => {
-            gl.bindTexture(gl.TEXTURE_2D, tex);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tempImg);
-            streamWidth = tempImg.naturalWidth;
-            streamHeight = tempImg.naturalHeight;
-            resolve();
-          };
-          tempImg.onerror = reject;
-          tempImg.src = URL.createObjectURL(blob);
+        bmp = await new Promise((res, rej) => {
+          const img = new Image();
+          img.onload = () => res(img);
+          img.onerror = rej;
+          img.src = URL.createObjectURL(blob);
         });
       }
+      updateTexture(bmp);
+      if (bmp.close) bmp.close();
 
-      frameCount++;
-      const now = performance.now();
-      if (now - lastStatTime >= 1000) {
-        const fps = ((frameCount * 1000) / (now - lastStatTime)).toFixed(1);
-        statsEl.textContent = 'Live Stream: ' + streamWidth + 'x' + streamHeight + ' @ ' + fps + ' FPS';
-        frameCount = 0;
-        lastStatTime = now;
-      }
       fetching = false;
-      requestAnimationFrame(fetchFrame);
+      setTimeout(fetchFrame, 0);
     } catch (err) {
       fetching = false;
-      setTimeout(fetchFrame, 60);
+      setTimeout(fetchFrame, 40);
     }
   }
   fetchFrame();
@@ -957,6 +941,7 @@ static const char* kQuestWebXRAppHtml5 = R"HTML(function makePerspective(fovRad,
   function onXRFrame(time, frame) {
     const session = frame.session;
     session.requestAnimationFrame(onXRFrame);
+    if (!fetching) { fetchFrame(); }
     const pose = frame.getViewerPose(xrRefSpace);
     if (!pose) return;
 
@@ -1121,9 +1106,11 @@ public:
 		gamepad_btn_input(DC_DPAD_LEFT, (buttons & (1 << 6)) != 0);
 		gamepad_btn_input(DC_DPAD_RIGHT, (buttons & (1 << 7)) != 0);
 		gamepad_btn_input(DC_BTN_START, (buttons & (1 << 8)) != 0);
+		gamepad_btn_input(DC_BTN_D, (buttons & (1 << 9)) != 0);
+		gamepad_btn_input(DC_DPAD2_DOWN, (buttons & (1 << 10)) != 0);
 
-		const int lt_val = ((buttons & (1 << 9)) != 0 || (buttons & (1 << 11)) != 0) ? 32767 : static_cast<int>(std::clamp(lt, 0.0f, 1.0f) * 65535.0f - 32768.0f);
-		const int rt_val = ((buttons & (1 << 10)) != 0 || (buttons & (1 << 12)) != 0) ? 32767 : static_cast<int>(std::clamp(rt, 0.0f, 1.0f) * 65535.0f - 32768.0f);
+		const int lt_val = ((buttons & (1 << 11)) != 0) ? 32767 : static_cast<int>(std::clamp(lt, 0.0f, 1.0f) * 65535.0f - 32768.0f);
+		const int rt_val = ((buttons & (1 << 12)) != 0) ? 32767 : static_cast<int>(std::clamp(rt, 0.0f, 1.0f) * 65535.0f - 32768.0f);
 		gamepad_axis_input(DC_AXIS_LT, lt_val);
 		gamepad_axis_input(DC_AXIS_RT, rt_val);
 
@@ -1384,6 +1371,12 @@ void QuestBroadcastService::UpdateControllerInput(uint32_t buttons, float joyx_i
 	if (buttons & (1 << 10)) pressed_mask |= DC_DPAD2_DOWN; // Naomi Test
 	if (pd) pressed_mask |= DC_BTN_A; // Pointer click acts as A / Gun trigger
 
+	// Auto map stick tilt to Dpad bits for 2D & arcade games
+	if (joyx_in < -0.4f) pressed_mask |= DC_DPAD_LEFT;
+	if (joyx_in > 0.4f)  pressed_mask |= DC_DPAD_RIGHT;
+	if (joyy_in < -0.4f) pressed_mask |= DC_DPAD_UP;
+	if (joyy_in > 0.4f)  pressed_mask |= DC_DPAD_DOWN;
+
 	const uint32_t kAllQuestButtons = DC_BTN_A | DC_BTN_B | DC_BTN_X | DC_BTN_Y |
 	                                  DC_DPAD_UP | DC_DPAD_DOWN | DC_DPAD_LEFT | DC_DPAD_RIGHT |
 	                                  DC_BTN_START | DC_BTN_D | DC_DPAD2_DOWN;
@@ -1410,14 +1403,26 @@ void QuestBroadcastService::UpdateControllerInput(uint32_t buttons, float joyx_i
 	mapleInputState[0].halfAxes[PJTI_L] = ltv;
 	mapleInputState[0].halfAxes[PJTI_R] = rtv;
 
-	// 4. Mouse / Lightgun pointer
+	// 4. Mouse / Lightgun pointer & Flycast UI Navigation
 	if (px >= 0.0f && py >= 0.0f)
 	{
+		// In-game lightgun/mouse
 		SetMousePosition(static_cast<int>(px * 640.0f), static_cast<int>(py * 480.0f), 640, 480, 0);
 		if (pd)
 			mo_buttons[0] &= ~1;
 		else
 			mo_buttons[0] |= 1;
+
+		// Flycast Menu / UI mouse pointer
+		int scr_w = settings.display.width > 0 ? settings.display.width : 640;
+		int scr_h = settings.display.height > 0 ? settings.display.height : 480;
+		gui_set_mouse_position(static_cast<int>(px * scr_w), static_cast<int>(py * scr_h), false);
+		gui_set_mouse_button(0, pd, false);
+	}
+	else
+	{
+		gui_set_mouse_position(-1, -1, false);
+		gui_set_mouse_button(0, false, false);
 	}
 
 	if (m_vr_gamepad)
@@ -1863,6 +1868,42 @@ void QuestBroadcastService::ServerLoop()
 						std::this_thread::sleep_for(std::chrono::milliseconds(8));
 					}
 				}
+				GracefulClose(client_sock);
+				return;
+			}
+
+			// 2b. Fast dedicated /input requests
+			if (std::strstr(req_buf, "/input?") != nullptr)
+			{
+				const char* q = std::strstr(req_buf, "/input?");
+				if (q)
+				{
+					uint32_t btns = 0;
+					float jx = 0.0f, jy = 0.0f, lt = 0.0f, rt = 0.0f;
+					float px = -1.0f, py = -1.0f;
+					bool pd = false;
+
+					const char* pb = std::strstr(q, "b=");
+					if (pb) btns = static_cast<uint32_t>(std::strtoul(pb + 2, nullptr, 10));
+					const char* pjx = std::strstr(q, "x=");
+					if (pjx) jx = std::strtof(pjx + 2, nullptr);
+					const char* pjy = std::strstr(q, "y=");
+					if (pjy) jy = std::strtof(pjy + 2, nullptr);
+					const char* plt = std::strstr(q, "lt=");
+					if (plt) lt = std::strtof(plt + 3, nullptr);
+					const char* prt = std::strstr(q, "rt=");
+					if (prt) rt = std::strtof(prt + 3, nullptr);
+					const char* p_px = std::strstr(q, "px=");
+					if (p_px) px = std::strtof(p_px + 3, nullptr);
+					const char* p_py = std::strstr(q, "py=");
+					if (p_py) py = std::strtof(p_py + 3, nullptr);
+					const char* p_pd = std::strstr(q, "pd=");
+					if (p_pd) pd = (std::strtoul(p_pd + 3, nullptr, 10) != 0);
+
+					UpdateControllerInput(btns, jx, jy, lt, rt, px, py, pd);
+				}
+				const char* resp = "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n";
+				send(client_sock, resp, (int)strlen(resp), 0);
 				GracefulClose(client_sock);
 				return;
 			}
