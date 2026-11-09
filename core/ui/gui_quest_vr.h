@@ -51,6 +51,9 @@ public:
 	void SetCropMode(int mode) { m_crop_mode.store(mode); }
 	int GetCropMode() const { return m_crop_mode.load(); }
 
+	void SetMutePcAudio(bool mute) { m_mute_pc_audio.store(mute); }
+	bool GetMutePcAudio() const { return m_mute_pc_audio.load(); }
+
 	void SetCaptureTargetWindow(void* hwnd) { m_target_hwnd.store(hwnd); }
 	void* GetCaptureTargetWindow() const { return m_target_hwnd.load(); }
 
@@ -60,7 +63,10 @@ public:
 	std::string GetLastErrorMsg() const;
 
 	void PushAudioSamples(const void* data, size_t sample_pairs);
-	void UpdateControllerInput(uint32_t buttons, float joyx, float joyy, float lt, float rt);
+	void UpdateControllerInput(uint32_t buttons, float joyx, float joyy, float lt, float rt, float px = -1.0f, float py = -1.0f, bool pd = false);
+
+	bool RunAdbReverse(std::string& out_msg);
+	bool LaunchQuestBrowser(std::string& out_msg);
 
 private:
 	QuestBroadcastService();
@@ -76,6 +82,7 @@ private:
 	std::atomic<int> m_target_fps{72};
 	std::atomic<int> m_jpeg_quality{80};
 	std::atomic<int> m_crop_mode{0};
+	std::atomic<bool> m_mute_pc_audio{true};
 	std::atomic<void*> m_target_hwnd{nullptr};
 
 	std::atomic<uint64_t> m_frames_captured{0};
@@ -99,6 +106,7 @@ private:
 };
 
 void QuestBroadcastPushAudio(const void* samples, size_t count);
+bool QuestBroadcastShouldMutePcAudio();
 
 // Fullscreen Quest VR & Mixed Reality Studio screen (GuiState::QuestVR)
 void gui_quest_vr();

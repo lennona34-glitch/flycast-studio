@@ -18,6 +18,7 @@
 #include "serialize.h"
 #include "oslib/i18n.h"
 #include "input/maplelink.h"
+#include "ui/gui_quest_vr.h"
 #include <time.h>
 #ifdef TARGET_UWP
 #include <winrt/Windows.System.h>
@@ -111,6 +112,11 @@ int flycast_init(int argc, char* argv[])
 
 		if(config::ProfilerEnabled)
 			LogManager::GetInstance()->SetEnable(LogTypes::PROFILER, true);
+
+		if (config::AutoStartQuestBroadcast)
+		{
+			QuestBroadcastService::Instance().Start(8765);
+		}
 
 		return 0;
 	} catch (const std::exception& e) {

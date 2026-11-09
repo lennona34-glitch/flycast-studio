@@ -49,6 +49,7 @@ AudioBackend *AudioBackend::getBackend(const std::string& slug)
 }
 
 extern void QuestBroadcastPushAudio(const void* samples, size_t count);
+extern bool QuestBroadcastShouldMutePcAudio();
 
 void WriteSample(s16 r, s16 l)
 {
@@ -58,7 +59,17 @@ void WriteSample(s16 r, s16 l)
 	if (++writePtr == SAMPLE_COUNT)
 	{
 		if (currentBackend != nullptr)
-			currentBackend->push(Buffer, SAMPLE_COUNT, config::LimitFPS);
+		{
+			if (QuestBroadcastShouldMutePcAudio())
+			{
+				static const SoundFrame silence[SAMPLE_COUNT] = {};
+				currentBackend->push(silence, SAMPLE_COUNT, config::LimitFPS);
+			}
+			else
+			{
+				currentBackend->push(Buffer, SAMPLE_COUNT, config::LimitFPS);
+			}
+		}
 		QuestBroadcastPushAudio(Buffer, SAMPLE_COUNT);
 		writePtr = 0;
 	}

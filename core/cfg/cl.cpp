@@ -17,6 +17,7 @@
     along with Flycast.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include "cfg/cfg.h"
+#include "cfg/option.h"
 #include "stdclass.h"
 #include <cstdio>
 #include <cstring>
@@ -181,6 +182,11 @@ void parseCommandLine(int argc, const char * const argv[])
 		{
 			if (i < argc - 1)
 				parseConfigOption(argv[++i]);
+			continue;
+		}
+		if (!strcmp(argv[i], "-vr") || !strcmp(argv[i], "--vr") || !strcmp(argv[i], "-vr-broadcast") || !strcmp(argv[i], "--vr-broadcast"))
+		{
+			config::AutoStartQuestBroadcast = true;
 			continue;
 		}
 		// macOS

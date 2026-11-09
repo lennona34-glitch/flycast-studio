@@ -30,6 +30,8 @@
 #include "input/gamepad_device.h"
 #include "input/gamepad.h"
 #include "input/mapping.h"
+#include "input/mouse.h"
+#include "hw/maple/maple_cfg.h"
 
 #include <chrono>
 #include <cstdio>
@@ -276,6 +278,19 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
     background: #1e293b;
     border-color: #38bdf8;
   }
+  #reticle {
+    position: fixed;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #38bdf8;
+    background: rgba(56, 189, 248, 0.45);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    display: none;
+    z-index: 999;
+    box-shadow: 0 0 10px #38bdf8;
+  }
   .modal-overlay {
     position: fixed;
     inset: 0;
@@ -324,18 +339,24 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
     margin-top: 14px;
     flex-wrap: wrap;
   }
-</style>
+</style>)HTML";
+
+static const char* kQuestWebXRAppHtml2 = R"HTML(
 </head>
 <body>
 <audio id="streamAudio" preload="none"></audio>
 <button id="btnFloatMenu" class="float-menu-btn">⚙️ Settings / Exit Theater</button>
+<div id="reticle"></div>
 
 <div id="xrModal" class="modal-overlay" style="display: none;">
   <div class="modal-card">
-    <h3>🥽 Meta Quest WebXR Security Step</h3>
-    <p>Meta Quest Browser requires local network Wi-Fi origins to be allowed before enabling WebXR (6DoF Mixed Reality &amp; VR Cinema):</p>
+    <h3>🥽 Meta Quest WebXR 6DoF Setup</h3>
+    <p>WebXR requires a secure origin. Choose your preferred way to play:</p>
     <div class="step-box">
-      <b>To activate 6DoF WebXR in Quest Browser:</b><br>
+      <b>🚀 Instant 6DoF via ADB Wireless (Recommended):</b><br>
+      Since Quest Wireless Debugging is active on your PC, simply open: <code>http://localhost:8765</code> in Quest Browser!<br>
+      Localhost is automatically treated as a secure context and enables 6DoF VR &amp; Mixed Reality immediately.<br><br>
+      <b>Or enable via chrome://flags:</b><br>
       1. Open a new tab and go to: <code>chrome://flags</code><br>
       2. Search: <b>Insecure origins treated as secure</b><br>
       3. Enter: <code id="modalUrl">http://...</code><br>
@@ -380,16 +401,48 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
   <canvas id="glcanvas"></canvas>
 </div>
 
-<script>
+<script>)HTML";
+
+static const char* kQuestWebXRAppHtml3 = R"HTML(
 (function() {
   const navKeys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End']);
   window.addEventListener('keydown', (e) => {
-    if (navKeys.has(e.key)) e.preventDefault();
+    if (navKeys.has(e.key) || e.key === 'Back' || e.keyCode === 27 || e.keyCode === 4) {
+      e.preventDefault();
+    }
   }, { passive: false });
   window.addEventListener('scroll', () => window.scrollTo(0, 0), { passive: false });
 
+  // Trap back navigation so B button does not exit fullscreen or go back
+  window.history.pushState(null, null, window.location.href);
+  window.addEventListener('popstate', () => {
+    window.history.pushState(null, null, window.location.href);
+  });
+
   const canvas = document.getElementById('glcanvas');
   const statsEl = document.getElementById('stats');
+  const reticle = document.getElementById('reticle');
+  let pointerX = -1.0, pointerY = -1.0, pointerDown = false;
+
+  canvas.addEventListener('pointermove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      pointerX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      pointerY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+      if (reticle) {
+        reticle.style.left = e.clientX + 'px';
+        reticle.style.top = e.clientY + 'px';
+        reticle.style.display = 'block';
+      }
+    }
+  });
+  canvas.addEventListener('pointerleave', () => {
+    if (reticle) reticle.style.display = 'none';
+    if (!xrSession) { pointerX = -1.0; pointerY = -1.0; }
+  });
+  canvas.addEventListener('pointerdown', () => { pointerDown = true; });
+  window.addEventListener('pointerup', () => { pointerDown = false; });
+
   const gl = canvas.getContext('webgl', { xrCompatible: true, alpha: true, antialias: true });
   if (!gl) {
     statsEl.textContent = 'WebGL not supported in this browser.';
@@ -445,6 +498,10 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
     const urlEl = document.getElementById('modalUrl');
     if (urlEl) urlEl.textContent = window.location.origin;
     if (modal) modal.style.display = 'flex';
+  }
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const b = document.getElementById('ctrlStatus');
+    if (b) { b.textContent = '🚀 6DoF WebXR Active (ADB Forwarded)'; }
   }
 
   let renderMode = 0; // 0=2D, 1=SBS, 2=TopBottom, 3=Anaglyph
@@ -529,9 +586,7 @@ static const char* kQuestWebXRAppHtml1 = R"HTML(<!DOCTYPE html>
       }
     }
   `;
-)HTML";
 
-static const char* kQuestWebXRAppHtml2 = R"HTML(
   function compileShader(type, src) {
     const s = gl.createShader(type);
     gl.shaderSource(s, src);
@@ -611,7 +666,9 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
   let streamWidth = 0, streamHeight = 0;
   let fetching = false;
 
-  function getInputQuery() {
+  )HTML";
+
+static const char* kQuestWebXRAppHtml4 = R"HTML(function getInputQuery() {
     let b = 0;
     let lx = 0, ly = 0;
     let lt = 0, rt = 0;
@@ -620,24 +677,63 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
     for (let i = 0; i < gamepads.length; i++) {
       const gp = gamepads[i];
       if (!gp || !gp.connected) continue;
-      if (gp.buttons) {
-        if (gp.buttons[0] && gp.buttons[0].pressed) b |= (1 << 0);
-        if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 1);
-        if (gp.buttons[2] && gp.buttons[2].pressed) b |= (1 << 2);
-        if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 3);
-        if (gp.buttons[12] && gp.buttons[12].pressed) b |= (1 << 4);
-        if (gp.buttons[13] && gp.buttons[13].pressed) b |= (1 << 5);
-        if (gp.buttons[14] && gp.buttons[14].pressed) b |= (1 << 6);
-        if (gp.buttons[15] && gp.buttons[15].pressed) b |= (1 << 7);
-        if (gp.buttons[9] && gp.buttons[9].pressed) b |= (1 << 8);
-        if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 9);
-        if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 10);
-        if (gp.buttons[6] && gp.buttons[6].value > 0.2) lt = Math.max(lt, gp.buttons[6].value);
-        if (gp.buttons[7] && gp.buttons[7].value > 0.2) rt = Math.max(rt, gp.buttons[7].value);
-      }
-      if (gp.axes && gp.axes.length >= 2) {
-        if (Math.abs(gp.axes[0]) > 0.15) lx = gp.axes[0];
-        if (Math.abs(gp.axes[1]) > 0.15) ly = gp.axes[1];
+
+      const idLower = (gp.id || '').toLowerCase();
+      const isTouch = idLower.includes('oculus') || idLower.includes('touch') || idLower.includes('quest') || gp.hand;
+
+      if (isTouch) {
+        const isLeft = (gp.hand === 'left' || idLower.includes('left'));
+        const isRight = (gp.hand === 'right' || idLower.includes('right'));
+
+        if (isLeft) {
+          if (gp.axes && gp.axes.length >= 2) {
+            if (Math.abs(gp.axes[0]) > 0.15) lx = gp.axes[0];
+            if (Math.abs(gp.axes[1]) > 0.15) ly = gp.axes[1];
+          }
+          if (gp.buttons) {
+            if (gp.buttons[1] && gp.buttons[1].value > 0.2) lt = Math.max(lt, gp.buttons[1].value);
+            if (gp.buttons[2] && gp.buttons[2].pressed) b |= (1 << 11);
+            if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 2);  // X
+            if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 3);  // Y
+            if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 9);  // Menu -> Coin
+            if (gp.buttons[0] && gp.buttons[0].pressed) b |= (1 << 8);  // Stick click -> Start
+          }
+        } else if (isRight) {
+          if (gp.buttons) {
+            if (gp.buttons[1] && gp.buttons[1].value > 0.2) rt = Math.max(rt, gp.buttons[1].value);
+            if (gp.buttons[2] && gp.buttons[2].pressed) b |= (1 << 12);
+            if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 0);  // A
+            if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 1);  // B
+            if (gp.buttons[0] && gp.buttons[0].pressed) b |= (1 << 8);  // Stick click -> Start
+          }
+        }
+      } else {
+        if (gp.buttons) {
+          if (gp.buttons[0] && gp.buttons[0].pressed) b |= (1 << 0);
+          if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 1);
+          if (gp.buttons[2] && gp.buttons[2].pressed) b |= (1 << 2);
+          if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 3);
+          if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 11);
+          if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 12);
+          if (gp.buttons[6] && gp.buttons[6].value > 0.2) lt = Math.max(lt, gp.buttons[6].value);
+          if (gp.buttons[7] && gp.buttons[7].value > 0.2) rt = Math.max(rt, gp.buttons[7].value);
+          if (gp.buttons[8] && gp.buttons[8].pressed) b |= (1 << 9);  // Select/Back -> Coin
+          if (gp.buttons[9] && gp.buttons[9].pressed) b |= (1 << 8);  // Start
+          if (gp.buttons[12] && gp.buttons[12].pressed) b |= (1 << 4);
+          if (gp.buttons[13] && gp.buttons[13].pressed) b |= (1 << 5);
+          if (gp.buttons[14] && gp.buttons[14].pressed) b |= (1 << 6);
+          if (gp.buttons[15] && gp.buttons[15].pressed) b |= (1 << 7);
+        }
+        if (gp.axes && gp.axes.length >= 2) {
+          if (Math.abs(gp.axes[0]) > 0.15) lx = gp.axes[0];
+          if (Math.abs(gp.axes[1]) > 0.15) ly = gp.axes[1];
+          if (gp.axes.length >= 6) {
+            if (gp.axes[4] < -0.5) b |= (1 << 6);
+            if (gp.axes[4] > 0.5) b |= (1 << 7);
+            if (gp.axes[5] < -0.5) b |= (1 << 4);
+            if (gp.axes[5] > 0.5) b |= (1 << 5);
+          }
+        }
       }
     }
 
@@ -650,22 +746,30 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
             if (Math.abs(gp.axes[2]) > 0.15) lx = gp.axes[2];
             if (Math.abs(gp.axes[3]) > 0.15) ly = gp.axes[3];
           }
-          if (gp.buttons && gp.buttons[0] && gp.buttons[0].value > 0.2) lt = Math.max(lt, gp.buttons[0].value);
-          if (gp.buttons && gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 2);
-          if (gp.buttons && gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 8);
-          if (gp.buttons && gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 2);
-          if (gp.buttons && gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 3);
+          if (gp.buttons) {
+            if (gp.buttons[0] && gp.buttons[0].value > 0.2) lt = Math.max(lt, gp.buttons[0].value);
+            if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 11);
+            if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 9);
+            if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 2);
+            if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 3);
+          }
         } else if (source.handedness === 'right') {
-          if (gp.buttons && gp.buttons[0] && gp.buttons[0].value > 0.2) rt = Math.max(rt, gp.buttons[0].value);
-          if (gp.buttons && gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 1);
-          if (gp.buttons && gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 8);
-          if (gp.buttons && gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 0);
-          if (gp.buttons && gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 1);
+          if (gp.buttons) {
+            if (gp.buttons[0] && gp.buttons[0].value > 0.2) rt = Math.max(rt, gp.buttons[0].value);
+            if (gp.buttons[1] && gp.buttons[1].pressed) b |= (1 << 12);
+            if (gp.buttons[3] && gp.buttons[3].pressed) b |= (1 << 8);
+            if (gp.buttons[4] && gp.buttons[4].pressed) b |= (1 << 0);
+            if (gp.buttons[5] && gp.buttons[5].pressed) b |= (1 << 1);
+          }
         }
       }
     }
 
-    return 'b=' + b + '&x=' + lx.toFixed(3) + '&y=' + ly.toFixed(3) + '&lt=' + lt.toFixed(3) + '&rt=' + rt.toFixed(3);
+    let q = 'b=' + b + '&x=' + lx.toFixed(3) + '&y=' + ly.toFixed(3) + '&lt=' + lt.toFixed(3) + '&rt=' + rt.toFixed(3);
+    if (pointerX >= 0.0 && pointerY >= 0.0) {
+      q += '&px=' + pointerX.toFixed(3) + '&py=' + pointerY.toFixed(3) + '&pd=' + (pointerDown ? '1' : '0');
+    }
+    return q;
   }
 
   async function fetchFrame() {
@@ -723,7 +827,9 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
   }
   fetchFrame();
 
-  function makePerspective(fovRad, aspect, near, far) {
+  )HTML";
+
+static const char* kQuestWebXRAppHtml5 = R"HTML(function makePerspective(fovRad, aspect, near, far) {
     const f = 1.0 / Math.tan(fovRad / 2);
     const nf = 1 / (near - far);
     return new Float32Array([
@@ -854,7 +960,7 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
     const pose = frame.getViewerPose(xrRefSpace);
     if (!pose) return;
 
-    // Use Right controller thumbstick strictly for distance and screen size in VR
+    // Use Right controller thumbstick for distance and screen size in VR
     for (const source of session.inputSources) {
       if (source.handedness === 'right' && source.gamepad && source.gamepad.axes.length >= 4) {
         const axY = source.gamepad.axes[3];
@@ -865,6 +971,40 @@ static const char* kQuestWebXRAppHtml2 = R"HTML(
           rebuildMesh();
         }
       }
+    }
+
+    // Raycast controller pointer onto virtual screen plane
+    let xrHit = false;
+    for (const source of session.inputSources) {
+      if (source.targetRaySpace) {
+        const rayPose = frame.getPose(source.targetRaySpace, xrRefSpace);
+        if (rayPose) {
+          const m = rayPose.transform.matrix;
+          const ox = m[12], oy = m[13], oz = m[14];
+          const dx = -m[8], dy = -m[9], dz = -m[10];
+          if (dz < -0.05) {
+            const t = (-screenDist - oz) / dz;
+            if (t > 0.1 && t < 10.0) {
+              const hitX = ox + dx * t;
+              const hitY = oy + dy * t;
+              const halfW = (1.6 * screenScale) * 0.5;
+              const halfH = (0.9 * screenScale) * 0.5;
+              if (Math.abs(hitX) <= halfW && Math.abs(hitY) <= halfH) {
+                pointerX = (hitX + halfW) / (2.0 * halfW);
+                pointerY = (halfH - hitY) / (2.0 * halfH);
+                xrHit = true;
+                if (source.gamepad && source.gamepad.buttons[0] && source.gamepad.buttons[0].value > 0.3) {
+                  pointerDown = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    if (!xrHit && xrSession) {
+      pointerX = -1.0;
+      pointerY = -1.0;
     }
 
     const q = pose.transform.orientation;
@@ -982,35 +1122,34 @@ public:
 		gamepad_btn_input(DC_DPAD_RIGHT, (buttons & (1 << 7)) != 0);
 		gamepad_btn_input(DC_BTN_START, (buttons & (1 << 8)) != 0);
 
-		const int lt_val = ((buttons & (1 << 9)) != 0) ? 32767 : static_cast<int>(std::clamp(lt, 0.0f, 1.0f) * 65535.0f - 32768.0f);
-		const int rt_val = ((buttons & (1 << 10)) != 0) ? 32767 : static_cast<int>(std::clamp(rt, 0.0f, 1.0f) * 65535.0f - 32768.0f);
+		const int lt_val = ((buttons & (1 << 9)) != 0 || (buttons & (1 << 11)) != 0) ? 32767 : static_cast<int>(std::clamp(lt, 0.0f, 1.0f) * 65535.0f - 32768.0f);
+		const int rt_val = ((buttons & (1 << 10)) != 0 || (buttons & (1 << 12)) != 0) ? 32767 : static_cast<int>(std::clamp(rt, 0.0f, 1.0f) * 65535.0f - 32768.0f);
 		gamepad_axis_input(DC_AXIS_LT, lt_val);
 		gamepad_axis_input(DC_AXIS_RT, rt_val);
 
 		const int jx = static_cast<int>(std::round(std::clamp(joyx, -1.0f, 1.0f) * 32767.0f));
 		const int jy = static_cast<int>(std::round(std::clamp(joyy, -1.0f, 1.0f) * 32767.0f));
-		if (jx >= 0)
-		{
+		if (jx > 0)
 			gamepad_axis_input(DC_AXIS_RIGHT, jx);
+		else if (jx < 0)
+			gamepad_axis_input(DC_AXIS_LEFT, -jx);
+		else
+		{
+			gamepad_axis_input(DC_AXIS_RIGHT, 0);
 			gamepad_axis_input(DC_AXIS_LEFT, 0);
 		}
+
+		if (jy > 0)
+			gamepad_axis_input(DC_AXIS_DOWN, jy);
+		else if (jy < 0)
+			gamepad_axis_input(DC_AXIS_UP, -jy);
 		else
 		{
-			gamepad_axis_input(DC_AXIS_LEFT, -jx);
-			gamepad_axis_input(DC_AXIS_RIGHT, 0);
-		}
-		if (jy >= 0)
-		{
-			gamepad_axis_input(DC_AXIS_DOWN, jy);
+			gamepad_axis_input(DC_AXIS_DOWN, 0);
 			gamepad_axis_input(DC_AXIS_UP, 0);
 		}
-		else
-		{
-			gamepad_axis_input(DC_AXIS_UP, -jy);
-			gamepad_axis_input(DC_AXIS_DOWN, 0);
-		}
 	}
-};
+	};
 } // namespace
 
 QuestBroadcastService& QuestBroadcastService::Instance()
@@ -1166,6 +1305,12 @@ bool QuestBroadcastService::Start(uint16_t port, int target_fps, int jpeg_qualit
 		m_vr_gamepad = std::make_shared<QuestGamepadDevice>(0);
 		GamepadDevice::Register(m_vr_gamepad);
 	}
+
+	std::thread([this]() {
+		std::string dummy;
+		RunAdbReverse(dummy);
+	}).detach();
+
 	return true;
 #else
 	SetError("Quest VR Broadcast Server requires Windows sockets.");
@@ -1222,11 +1367,118 @@ void QuestBroadcastService::PushAudioSamples(const void* data, size_t sample_pai
 	m_audio_buffer.insert(m_audio_buffer.end(), pcm, pcm + total_samples);
 }
 
-void QuestBroadcastService::UpdateControllerInput(uint32_t buttons, float joyx, float joyy, float lt, float rt)
+void QuestBroadcastService::UpdateControllerInput(uint32_t buttons, float joyx_in, float joyy_in, float lt_in, float rt_in, float px, float py, bool pd)
 {
-	if (!m_vr_gamepad)
-		return;
-	static_cast<QuestGamepadDevice*>(m_vr_gamepad.get())->SetInput(buttons, joyx, joyy, lt, rt);
+	// 1. Direct hardware bitmask updates for Maple bus & Naomi/Dreamcast games
+	uint32_t pressed_mask = 0;
+	if (buttons & (1 << 0)) pressed_mask |= DC_BTN_A;
+	if (buttons & (1 << 1)) pressed_mask |= DC_BTN_B;
+	if (buttons & (1 << 2)) pressed_mask |= DC_BTN_X;
+	if (buttons & (1 << 3)) pressed_mask |= DC_BTN_Y;
+	if (buttons & (1 << 4)) pressed_mask |= DC_DPAD_UP;
+	if (buttons & (1 << 5)) pressed_mask |= DC_DPAD_DOWN;
+	if (buttons & (1 << 6)) pressed_mask |= DC_DPAD_LEFT;
+	if (buttons & (1 << 7)) pressed_mask |= DC_DPAD_RIGHT;
+	if (buttons & (1 << 8)) pressed_mask |= DC_BTN_START;
+	if (buttons & (1 << 9)) pressed_mask |= DC_BTN_D; // Naomi Coin!
+	if (buttons & (1 << 10)) pressed_mask |= DC_DPAD2_DOWN; // Naomi Test
+	if (pd) pressed_mask |= DC_BTN_A; // Pointer click acts as A / Gun trigger
+
+	const uint32_t kAllQuestButtons = DC_BTN_A | DC_BTN_B | DC_BTN_X | DC_BTN_Y |
+	                                  DC_DPAD_UP | DC_DPAD_DOWN | DC_DPAD_LEFT | DC_DPAD_RIGHT |
+	                                  DC_BTN_START | DC_BTN_D | DC_DPAD2_DOWN;
+
+	// In Flycast, kcode is active-LOW (0 = pressed, 1 = released)
+	kcode[0] = (kcode[0] | kAllQuestButtons) & ~pressed_mask;
+	mapleInputState[0].kcode = kcode[0];
+
+	// 2. Analog stick
+	const s16 sx = static_cast<s16>(std::clamp(joyx_in, -1.0f, 1.0f) * 32767.0f);
+	const s16 sy = static_cast<s16>(std::clamp(joyy_in, -1.0f, 1.0f) * 32767.0f);
+	joyx[0] = sx;
+	joyy[0] = sy;
+	mapleInputState[0].fullAxes[PJAI_X1] = sx;
+	mapleInputState[0].fullAxes[PJAI_Y1] = sy;
+
+	// 3. Triggers
+	u16 ltv = static_cast<u16>(std::clamp(lt_in, 0.0f, 1.0f) * 65535.0f);
+	u16 rtv = static_cast<u16>(std::clamp(rt_in, 0.0f, 1.0f) * 65535.0f);
+	if (buttons & (1 << 11)) ltv = 65535; // L digital trigger / bumper
+	if (buttons & (1 << 12)) rtv = 65535; // R digital trigger / bumper
+	lt[0] = ltv;
+	rt[0] = rtv;
+	mapleInputState[0].halfAxes[PJTI_L] = ltv;
+	mapleInputState[0].halfAxes[PJTI_R] = rtv;
+
+	// 4. Mouse / Lightgun pointer
+	if (px >= 0.0f && py >= 0.0f)
+	{
+		SetMousePosition(static_cast<int>(px * 640.0f), static_cast<int>(py * 480.0f), 640, 480, 0);
+		if (pd)
+			mo_buttons[0] &= ~1;
+		else
+			mo_buttons[0] |= 1;
+	}
+
+	if (m_vr_gamepad)
+		static_cast<QuestGamepadDevice*>(m_vr_gamepad.get())->SetInput(buttons, joyx_in, joyy_in, lt_in, rt_in);
+}
+
+bool QuestBroadcastService::RunAdbReverse(std::string& out_msg)
+{
+#if defined(_WIN32)
+	FILE* pipe = _popen("adb reverse tcp:8765 tcp:8765 2>&1", "r");
+	if (!pipe) {
+		out_msg = "Could not execute ADB. Ensure Android platform-tools (adb) are installed.";
+		return false;
+	}
+	char buf[256];
+	std::string res;
+	while (fgets(buf, sizeof(buf), pipe))
+		res += buf;
+	int code = _pclose(pipe);
+	if (code == 0) {
+		out_msg = "Port 8765 forwarded to Quest! In Quest Browser, open: http://localhost:8765";
+		return true;
+	} else {
+		out_msg = res.empty() ? "ADB exited with non-zero status." : res;
+		return false;
+	}
+#else
+	out_msg = "ADB is not supported on this platform.";
+	return false;
+#endif
+}
+
+bool QuestBroadcastService::LaunchQuestBrowser(std::string& out_msg)
+{
+#if defined(_WIN32)
+	FILE* pipe = _popen("adb shell am start -a android.intent.action.VIEW -d \"http://localhost:8765\" com.oculus.browser 2>&1", "r");
+	if (!pipe) {
+		out_msg = "Could not execute ADB.";
+		return false;
+	}
+	char buf[256];
+	std::string res;
+	while (fgets(buf, sizeof(buf), pipe))
+		res += buf;
+	int code = _pclose(pipe);
+	if (code == 0) {
+		out_msg = "Quest Browser launched on headset to http://localhost:8765!";
+		return true;
+	} else {
+		out_msg = "ADB launch failed: " + res;
+		return false;
+	}
+#else
+	out_msg = "ADB is not supported on this platform.";
+	return false;
+#endif
+}
+
+bool QuestBroadcastShouldMutePcAudio()
+{
+	return QuestBroadcastService::Instance().IsRunning() && QuestBroadcastService::Instance().GetMutePcAudio();
 }
 
 bool QuestBroadcastService::CaptureFrameToJpeg(std::vector<uint8_t>& out_jpeg)
@@ -1623,18 +1875,27 @@ void QuestBroadcastService::ServerLoop()
 				{
 					uint32_t btns = 0;
 					float jx = 0.0f, jy = 0.0f, lt = 0.0f, rt = 0.0f;
+					float px = -1.0f, py = -1.0f;
+					bool pd = false;
+
 					const char* pb = std::strstr(q, "b=");
 					if (pb) btns = static_cast<uint32_t>(std::strtoul(pb + 2, nullptr, 10));
-					const char* px = std::strstr(q, "x=");
-					if (px) jx = std::strtof(px + 2, nullptr);
-					const char* py = std::strstr(q, "y=");
-					if (py) jy = std::strtof(py + 2, nullptr);
+					const char* pjx = std::strstr(q, "x=");
+					if (pjx) jx = std::strtof(pjx + 2, nullptr);
+					const char* pjy = std::strstr(q, "y=");
+					if (pjy) jy = std::strtof(pjy + 2, nullptr);
 					const char* plt = std::strstr(q, "lt=");
 					if (plt) lt = std::strtof(plt + 3, nullptr);
 					const char* prt = std::strstr(q, "rt=");
 					if (prt) rt = std::strtof(prt + 3, nullptr);
+					const char* p_px = std::strstr(q, "px=");
+					if (p_px) px = std::strtof(p_px + 3, nullptr);
+					const char* p_py = std::strstr(q, "py=");
+					if (p_py) py = std::strtof(p_py + 3, nullptr);
+					const char* p_pd = std::strstr(q, "pd=");
+					if (p_pd) pd = (std::strtoul(p_pd + 3, nullptr, 10) != 0);
 
-					UpdateControllerInput(btns, jx, jy, lt, rt);
+					UpdateControllerInput(btns, jx, jy, lt, rt, px, py, pd);
 				}
 
 				std::vector<uint8_t> jpeg_copy;
@@ -1690,7 +1951,7 @@ void QuestBroadcastService::ServerLoop()
 			}
 
 			// 5. Handle WebXR HTML Studio app
-			static const std::string kFullHtml = std::string(kQuestWebXRAppHtml1) + kQuestWebXRAppHtml2;
+			static const std::string kFullHtml = std::string(kQuestWebXRAppHtml1) + kQuestWebXRAppHtml2 + kQuestWebXRAppHtml3 + kQuestWebXRAppHtml4 + kQuestWebXRAppHtml5;
 			std::ostringstream hdr;
 			hdr << "HTTP/1.1 200 OK\r\n"
 				<< "Content-Type: text/html; charset=utf-8\r\n"
@@ -1965,6 +2226,34 @@ void gui_settings_quest_vr()
 			}
 			ImGui::EndCombo();
 		}
+	}
+
+	bool mute_pc = svc.GetMutePcAudio();
+	if (ImGui::Checkbox(T("Mute Local PC Speakers while Broadcasting"), &mute_pc))
+	{
+		svc.SetMutePcAudio(mute_pc);
+	}
+
+	ImGui::Spacing();
+	header(T("Quest Wireless 6DoF & ADB Fast Track"));
+	ImGui::TextWrapped("%s", T("If Quest Wireless Debugging is connected, ADB forward creates an instant secure localhost tunnel to port 8765. Opening http://localhost:8765 on Quest instantly unlocks 6DoF WebXR with zero browser flag setup!"));
+
+	static std::string s_adb_status;
+	static bool s_adb_ok = false;
+
+	if (ImGui::Button((std::string(ICON_FA_BOLT " ") + T("Auto-Forward Port 8765 to Quest (ADB Reverse)")).c_str(), ScaledVec2(360, 32)))
+	{
+		s_adb_ok = svc.RunAdbReverse(s_adb_status);
+	}
+	ImGui::SameLine();
+	if (ImGui::Button((std::string(ICON_FA_EXPAND " ") + T("Launch Quest Browser on Headset (ADB)")).c_str(), ScaledVec2(320, 32)))
+	{
+		s_adb_ok = svc.LaunchQuestBrowser(s_adb_status);
+	}
+	if (!s_adb_status.empty())
+	{
+		ImGui::Spacing();
+		ImGui::TextColored(s_adb_ok ? ImVec4(0.2f, 1.0f, 0.4f, 1.0f) : ImVec4(1.0f, 0.4f, 0.3f, 1.0f), "%s", s_adb_status.c_str());
 	}
 
 	ImGui::Spacing();
